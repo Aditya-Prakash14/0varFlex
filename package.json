@@ -10,10 +10,13 @@
 		"test": "node scripts/test.mjs",
 		"start": "npm run build && electron ."
 	},
-  "devDependencies": {
-    "@types/node": "^26.6.6",
-    "electron": "^45.1.0",
-    "esbuild": "^0.28.2",
-    "typescript": "^7.0.2"
-  }
+	"devDependencies": {
+		"@types/node": "^26.6.6",
+		"electron": "^45.1.0",
+		"esbuild": "^0.28.2",
+		"typescript": "^7.0.2"
+	},
+	"dependencies": {
+		"jsonc-parser": "^3.3.1"
+	}
 }

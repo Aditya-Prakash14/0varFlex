@@ -17,6 +17,10 @@ import { IWindowContext } from './ipcMain.js';
 class LogChannel implements ILogChannel {
 
 	async log(level: LogLevel, message: string): Promise<void> {
+		if (level === 'trace') {
+			// trace stays in the renderer's dev console — main's stdout keeps info+
+			return;
+		}
 		console[level]('[main]', message);
 	}
 }

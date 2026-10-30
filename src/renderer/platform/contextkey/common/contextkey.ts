@@ -1151,7 +1151,7 @@ export interface IContextKeyChangeEvent {
 	affectsSome(keys: ReadonlySet<string>): boolean;
 }
 
-export interface IContextKeyService {
+export interface IContextKeyService extends IContext {
 	readonly _serviceBrand: undefined;
 
 	readonly onDidChangeContext: Event<IContextKeyChangeEvent>;

@@ -23,7 +23,10 @@ export class PanelPart extends Part {
 
 	protected override createContentArea(parent: HTMLElement): HTMLElement {
 		return append(parent, $('.panel-content', {},
-			$('.panel-placeholder', {}, 'panel — empty for now')
+			$('.panel-placeholder', {}, 'panel — empty for now'),
+			// temporary: proves the preventDefault policy (cmd+b must toggle, not type) — the real
+			// settings editor arrives in 06
+			$('textarea#settings-preview', { placeholder: 'settings preview (try Cmd+B with focus in here)', spellcheck: 'false' })
 		));
 	}
 }

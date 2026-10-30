@@ -1,5 +1,4 @@
 import { ProxyChannel } from '../common/base/parts/ipc/ipc.js';
-import { addDisposableListener } from './base/browser/dom.js';
 import { InstantiationService } from '../common/platform/instantiation/common/instantiationService.js';
 import { ServiceCollection } from '../common/platform/instantiation/common/serviceCollection.js';
 import { SyncDescriptor } from '../common/platform/instantiation/common/descriptors.js';
@@ -8,13 +7,20 @@ import { LogService } from '../common/platform/log/common/logService.js';
 import { ILogChannel } from '../common/platform/log/common/logIpc.js';
 import { FileIOChannelClient } from '../common/platform/fileIO/common/fileIO.js';
 import { IWindowChannel } from '../common/platform/window/common/window.js';
+import { URI } from '../common/base/common/uri.js';
 import { CommandMetadata, CommandsRegistry, ICommandService } from './platform/commands/common/commands.js';
 import { ContextKeyExpr, RawContextKey } from './platform/contextkey/common/contextkey.js';
 import { ContextKeyService } from './platform/contextkey/common/contextKeyService.js';
+import { KeyChord, KeyCode, KeyMod } from './platform/keybinding/common/keyCodes.js';
+import { getCurrentOS } from './platform/keybinding/common/keybindingLabels.js';
+import { KeybindingsRegistry, KeybindingWeight } from './platform/keybinding/common/keybindingsRegistry.js';
+import { parseUserKeybindings } from './platform/keybinding/common/userKeybindings.js';
+import { KeybindingService } from './platform/keybinding/browser/keybindingService.js';
 import { CommandsQuickAccessProvider } from './platform/quickinput/browser/commandsQuickAccess.js';
 import { QuickInputController } from './platform/quickinput/browser/quickInput.js';
 import { StateStore } from './workbench/browser/stateStore.js';
 import { Workbench } from './workbench/browser/workbench.js';
+import { StatusbarAlignment } from './workbench/browser/parts/statusbar/statusbarPart.js';
 import { registerLayoutCommands, SHOW_ALL_COMMANDS_ID } from './workbench/contrib/layout/browser/layoutActions.js';
 import { CommandService } from './workbench/services/commands/common/commandService.js';
 import { MainProcessChannelClient } from './parts/ipc/ipcRenderer.js';
@@ -68,6 +74,13 @@ async function main(): Promise<void> {
 		title: 'Show All Commands',
 		category: 'View'
 	});
+	// real binding from vs/workbench/browser/actions/quickAccessActions.ts: cmd+shift+p, F1 secondary
+	KeybindingsRegistry.registerKeybindingRule({
+		id: SHOW_ALL_COMMANDS_ID,
+		weight: KeybindingWeight.WorkbenchContrib,
+		primary: KeyMod.CtrlCmd | KeyMod.Shift | KeyCode.KeyP,
+		secondary: KeyCode.F1
+	});
 
 	// dev probe: proves preconditions gate surfacing (palette) but never execution
 	CommandsRegistry.registerCommand('workbench.action.probeNoPanel', () => {
@@ -80,18 +93,95 @@ async function main(): Promise<void> {
 		precondition: ContextKeyExpr.not('panelVisible')
 	});
 
-	// F1 opens the palette (the real keybinding arrives in 05; F1 is VS Code's alternate)
-	addDisposableListener(document.body, 'keydown', (e: KeyboardEvent) => {
-		if (e.key === 'F1' && !quickInput.isOpen) {
-			e.preventDefault();
-			void commandService.executeCommand(SHOW_ALL_COMMANDS_ID);
-		}
-	});
+	// ---- keybindings (exercise 05)
+	const os = getCurrentOS();
+	const keybindingService = new KeybindingService(commandService, contextKeyService, logService, os);
 
-	// dev hook for the acceptance checks: drive commands from the console
+	// chord test fixtures: cmd+k cmd+a / cmd+k cmd+b (no metadata → they stay out of the palette)
+	CommandsRegistry.registerCommand('mini.probe.chordA', () => logService.info('chord probe A fired'));
+	CommandsRegistry.registerCommand('mini.probe.chordB', () => logService.info('chord probe B fired'));
+	KeybindingsRegistry.registerKeybindingRule({
+		id: 'mini.probe.chordA',
+		weight: KeybindingWeight.BuiltinExtension,
+		primary: KeyChord(KeyMod.CtrlCmd | KeyCode.KeyK, KeyMod.CtrlCmd | KeyCode.KeyA)
+	});
+	KeybindingsRegistry.registerKeybindingRule({
+		id: 'mini.probe.chordB',
+		weight: KeybindingWeight.BuiltinExtension,
+		primary: KeyChord(KeyMod.CtrlCmd | KeyCode.KeyK, KeyMod.CtrlCmd | KeyCode.KeyB)
+	});
+	keybindingService.rebuild();
+
+	// user overrides: keybindings.json in userData; watch-lite + reload (debounced), keep last
+	// good state on parse errors
+	const userDataPath = await fileIO.getUserDataPath();
+	const keybindingsPath = URI.joinPath(URI.file(userDataPath), 'keybindings.json').fsPath;
+
+	const loadUserKeybindings = async (): Promise<void> => {
+		try {
+			const text = await fileIO.readTextFile(keybindingsPath);
+			if (text === null) {
+				return; // no file yet
+			}
+			const { items, errors } = parseUserKeybindings(text, os);
+			for (const error of errors) {
+				logService.error(`keybindings.json: ${error}`);
+			}
+			if (errors.length > 0 && items.length === 0) {
+				return; // keep the last good state
+			}
+			keybindingService.setUserKeybindings(items);
+			logService.info(`keybindings.json loaded (${items.length} entries)`);
+		} catch (error) {
+			logService.error(`keybindings.json could not be read: ${(error as Error).message}`);
+		}
+	};
+	await loadUserKeybindings();
+	{
+		let timer: number | undefined;
+		fileIO.onDidChangeFile(keybindingsPath)(() => {
+			if (timer !== undefined) {
+				window.clearTimeout(timer);
+			}
+			timer = window.setTimeout(() => {
+				timer = undefined;
+				void loadUserKeybindings();
+			}, 200);
+		});
+	}
+
+	// chord-pending indicator on the status bar (stretch: real status bar entry styling)
+	const updateChordIndicator = (): void => {
+		workbench.layout.statusbar.removeEntry('chord');
+		const label = keybindingService.pendingChordLabel;
+		if (label) {
+			workbench.layout.statusbar.addEntry('chord', {
+				text: `(${label}) was pressed, waiting for second key…`,
+				alignment: StatusbarAlignment.RIGHT,
+				priority: 5
+			});
+		}
+	};
+	keybindingService.onDidChangeChordState(updateChordIndicator);
+
+	// dev probes for the context-gating acceptance (rules are registered at runtime); their
+	// handlers log so the test can see which side of the gate matched
+	CommandsRegistry.registerCommand('mini.probe.whenVisible', () => logService.info('gated probe fired: sidebarVisible'));
+	CommandsRegistry.registerCommand('mini.probe.whenHidden', () => logService.info('gated probe fired: !sidebarVisible'));
+
+	// ---- dev hook for the acceptance checks: drive commands and keybindings from the console
 	(window as any).__miniDev = {
 		executeCommand: (id: string, ...args: unknown[]) => commandService.executeCommand(id, ...args),
-		contextKeyService
+		contextKeyService,
+		deserializeWhen: (when: string) => ContextKeyExpr.deserialize(when),
+		keybindings: {
+			register: (rule: unknown) => {
+				const disposable = KeybindingsRegistry.registerKeybindingRule(rule as never);
+				keybindingService.rebuild();
+				return disposable;
+			},
+			reloadUserBindings: loadUserKeybindings
+		}
 	};
 
 	logService.info('workbench created');

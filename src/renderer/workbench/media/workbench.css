@@ -328,6 +328,28 @@ body {
 	color: var(--mini-watermark-dim);
 }
 
+#settings-preview {
+	display: block;
+	box-sizing: border-box;
+	width: calc(100% - 40px);
+	margin: 4px 20px 20px;
+	height: 90px;
+	resize: none;
+	background: #3c3c3c;
+	color: var(--mini-foreground);
+	border: 1px solid #555555;
+	border-radius: 3px;
+	padding: 6px 8px;
+	font: inherit;
+	outline: none;
+}
+
+/* ---- chord-pending status bar entry ---- */
+
+.statusbar-entry.chord {
+	color: #ffffff;
+}
+
 /* ---- status bar ---- */
 
 .part.statusbar {

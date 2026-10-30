@@ -3,6 +3,8 @@
 // quick access actions).
 
 import { CommandMetadata, CommandsRegistry } from '../../../../platform/commands/common/commands.js';
+import { KeyCode, KeyMod } from '../../../../platform/keybinding/common/keyCodes.js';
+import { KeybindingsRegistry, KeybindingWeight } from '../../../../platform/keybinding/common/keybindingsRegistry.js';
 import type { IWindowChannel } from '../../../../../common/platform/window/common/window.js';
 import type { WorkbenchLayout } from '../../../browser/layout.js';
 
@@ -19,6 +21,12 @@ export function registerLayoutCommands(layout: WorkbenchLayout, windowChannel: I
 		title: 'Toggle Sidebar Visibility',
 		category: 'View'
 	});
+	// real binding from vs/workbench/browser/actions/layoutActions.ts
+	KeybindingsRegistry.registerKeybindingRule({
+		id: TOGGLE_SIDEBAR_VISIBILITY_ID,
+		weight: KeybindingWeight.WorkbenchContrib,
+		primary: KeyMod.CtrlCmd | KeyCode.KeyB
+	});
 
 	// note: upstream registers togglePanel with dynamic titles and `panelVisible`/`!panelVisible`
 	// precondition variants; this is the simple static version
@@ -28,6 +36,11 @@ export function registerLayoutCommands(layout: WorkbenchLayout, windowChannel: I
 		title: 'Toggle Panel',
 		category: 'View'
 	});
+	KeybindingsRegistry.registerKeybindingRule({
+		id: TOGGLE_PANEL_ID,
+		weight: KeybindingWeight.WorkbenchContrib,
+		primary: KeyMod.CtrlCmd | KeyCode.KeyJ
+	});
 
 	CommandsRegistry.registerCommand(TOGGLE_FULL_SCREEN_ID, () => {
 		void windowChannel.toggleFullScreen();
@@ -36,5 +49,13 @@ export function registerLayoutCommands(layout: WorkbenchLayout, windowChannel: I
 		id: TOGGLE_FULL_SCREEN_ID,
 		title: 'Toggle Full Screen',
 		category: 'View'
+	});
+	// real binding: ctrl+cmd+f on mac, F11 elsewhere
+	KeybindingsRegistry.registerKeybindingRule({
+		id: TOGGLE_FULL_SCREEN_ID,
+		weight: KeybindingWeight.WorkbenchContrib,
+		mac: KeyMod.CtrlCmd | KeyMod.WinCtrl | KeyCode.KeyF,
+		win: KeyCode.F11,
+		linux: KeyCode.F11
 	});
 }

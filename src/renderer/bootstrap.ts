@@ -1,5 +1,6 @@
 import { ProxyChannel } from '../common/base/parts/ipc/ipc.js';
 import { URI } from '../common/base/common/uri.js';
+import { TextModel } from '../common/editor/common/model/textModel.js';
 import { InstantiationService } from '../common/platform/instantiation/common/instantiationService.js';
 import { ServiceCollection } from '../common/platform/instantiation/common/serviceCollection.js';
 import { SyncDescriptor } from '../common/platform/instantiation/common/descriptors.js';
@@ -12,6 +13,9 @@ import { ConfigurationService } from '../common/platform/configuration/common/co
 import { IStorageService, StorageScope, WillSaveStateReason } from '../common/platform/storage/common/storage.js';
 import { BrowserStorageService } from '../common/platform/storage/common/storageService.js';
 import { addDisposableListener } from './base/browser/dom.js';
+import { EditorOptionsService } from './editor/browser/config.js';
+import { Selection } from './editor/browser/core/selection.js';
+import { EditorWidget, registerEditorCommands } from './editor/browser/editorWidget.js';
 import { CommandMetadata, CommandsRegistry, ICommandService } from './platform/commands/common/commands.js';
 import { ContextKeyExpr, RawContextKey } from './platform/contextkey/common/contextkey.js';
 import { ContextKeyService } from './platform/contextkey/common/contextKeyService.js';
@@ -42,6 +46,28 @@ function watchFile(fileIO: FileIOChannelClient, path: string, callback: () => vo
 			callback();
 		}, 200);
 	});
+}
+
+// the demo document the editor opens with (exercise 08)
+const WELCOME_TEXT = [
+	'// mini-vscode — exercise 08: the editor view',
+	'const greeting = "hello, world";',
+	'',
+	'function main() {',
+	'\treturn greeting.length; // try typing, arrows, Cmd+Z',
+	'}',
+	'',
+	'/* a block comment',
+	'   spanning lines: states carry across lines */',
+	'class Editor { /* cursor 500ms blink */ }'
+].join('\n');
+
+function generateLargeText(lineCount: number): string {
+	const lines: string[] = [];
+	for (let i = 1; i <= lineCount; i++) {
+		lines.push(`line ${i} — const value${i} = ${i % 97}; // generated for the perf gate`);
+	}
+	return lines.join('\n');
 }
 
 /** one-time import of exercise 03's ad-hoc state.json into storage, then delete it */
@@ -231,6 +257,38 @@ async function main(): Promise<void> {
 	};
 	keybindingService.onDidChangeChordState(updateChordIndicator);
 
+	// ---- the editor widget (exercise 08): one widget in the editor part, demo document open
+	const editorOptions = new EditorOptionsService(configurationService);
+	const editorContainer = workbench.layout.editor.getContentContainer();
+	let editor: EditorWidget | null = null;
+	if (editorContainer) {
+		editor = new EditorWidget(editorContainer, {
+			options: editorOptions,
+			configuration: configurationService,
+			contextKeyService
+		});
+		editor.setModel(new TextModel(WELCOME_TEXT));
+		registerEditorCommands(editor);
+		keybindingService.rebuild();
+		editor.focus();
+
+		// render stats in the status bar (the 100k-line gate reads this)
+		let lastPerfText = '';
+		window.setInterval(() => {
+			const stats = editor!.getPerfStats();
+			const text = `render avg ${stats.averageRenderMs.toFixed(2)}ms · last ${stats.lastRenderMs.toFixed(2)}ms · ${stats.lastRenderedLines}/${stats.totalLines} lines`;
+			if (text !== lastPerfText) {
+				lastPerfText = text;
+				workbench.layout.statusbar.removeEntry('debug.editor');
+				workbench.layout.statusbar.addEntry('debug.editor', {
+					text,
+					alignment: StatusbarAlignment.RIGHT,
+					priority: 59
+				});
+			}
+		}, 500);
+	}
+
 	// ---- debug readout: proves settings live reload until 08/10 replace it with real consumers
 	// shortcut: temporary; dies when editor/sidebar read these settings for real
 	const updateConfigDebug = (): void => {
@@ -264,7 +322,40 @@ async function main(): Promise<void> {
 				return disposable;
 			},
 			reloadUserBindings: loadUserKeybindings
-		}
+		},
+		editor: editor ? {
+			widget: editor,
+			type: (text: string) => editor!.type(text),
+			insertText: (text: string) => editor!.type(text),
+			undo: () => editor!.undo(),
+			redo: () => editor!.redo(),
+			getValue: () => editor!.getModel()?.getValue() ?? '',
+			getSelection: () => {
+				const selection = editor!.getSelection();
+				return {
+					anchor: { lineNumber: selection.anchorLineNumber, column: selection.anchorColumn },
+					active: { lineNumber: selection.activeLineNumber, column: selection.activeColumn },
+					isEmpty: selection.isEmpty()
+				};
+			},
+			setSelectionByPositions: (anchorLineNumber: number, anchorColumn: number, activeLineNumber: number, activeColumn: number) =>
+				editor!.setSelection(new Selection(anchorLineNumber, anchorColumn, activeLineNumber, activeColumn)),
+			getPerfStats: () => editor!.getPerfStats(),
+			renderNow: () => editor!.view.render(),
+			openPerformanceFile: (lineCount: number = 100000) => {
+				const started = performance.now();
+				editor!.setModel(new TextModel(generateLargeText(lineCount)));
+				editor!.view.render();
+				return {
+					openMs: performance.now() - started,
+					stats: editor!.getPerfStats()
+				};
+			},
+			openDemoFile: () => {
+				editor!.setModel(new TextModel(WELCOME_TEXT));
+				editor!.view.render();
+			}
+		} : null
 	};
 
 	logService.info('workbench created');

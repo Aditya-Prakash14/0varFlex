@@ -294,6 +294,151 @@ body {
 	color: #9d9d9d;
 }
 
+/* ---- editor widget (exercise 08) ---- */
+
+.editor {
+	position: absolute;
+	inset: 0;
+	overflow: hidden;
+	background: var(--mini-background);
+	color: var(--mini-foreground);
+	font-family: Menlo, Monaco, 'Courier New', monospace;
+	font-size: 14px;
+	cursor: text;
+}
+
+.editor-margin {
+	position: absolute;
+	left: 0;
+	top: 0;
+	bottom: 0;
+	width: 0;
+	overflow: hidden;
+}
+
+.editor-scrollable {
+	position: absolute;
+	left: 0;
+	top: 0;
+	right: 0;
+	bottom: 0;
+	overflow: auto;
+}
+
+/* native scrollbars (documented delta vs real VS Code's rendered scrollbar widget) */
+.editor-scrollable::-webkit-scrollbar {
+	width: 14px;
+	height: 14px;
+}
+
+.editor-scrollable::-webkit-scrollbar-thumb {
+	background: rgba(121, 121, 121, 0.4);
+}
+
+.editor-scrollable::-webkit-scrollbar-thumb:hover {
+	background: rgba(121, 121, 121, 0.7);
+}
+
+.editor-scrollable::-webkit-scrollbar-corner {
+	background: transparent;
+}
+
+.editor-content {
+	position: relative;
+	min-height: 100%;
+}
+
+.layer-lines {
+	position: absolute;
+	top: 0;
+	left: 0;
+	right: 0;
+}
+
+.view-line {
+	position: absolute;
+	left: 0;
+	white-space: pre;
+}
+
+.layer-line-numbers {
+	position: absolute;
+	top: 0;
+	left: 0;
+	right: 0;
+}
+
+.line-number {
+	position: absolute;
+	right: 8px;
+	text-align: right;
+	color: #6e7681;
+	font-variant-numeric: tabular-nums;
+}
+
+.line-number.current-line-number {
+	color: var(--mini-foreground);
+}
+
+.current-line {
+	position: absolute;
+	left: 0;
+	right: 0;
+	background: rgba(255, 255, 255, 0.045);
+}
+
+.overlay-layer {
+	position: absolute;
+	inset: 0;
+	pointer-events: none;
+}
+
+.overlay-rect {
+	position: absolute;
+}
+
+.selected-text {
+	background: #264f78;
+}
+
+.cursor {
+	background: #aeafad;
+}
+
+.tok-1 { color: #569cd6; } /* keyword */
+.tok-2 { color: #b5cea8; } /* number */
+.tok-3 { color: #ce9178; } /* string */
+.tok-4 { color: #6a9955; } /* comment */
+.tok-5 { color: #d4d4d4; } /* operator */
+
+.editor-textarea {
+	position: absolute;
+	left: 0;
+	top: 0;
+	width: 1px;
+	height: 0;
+	margin: 0;
+	padding: 0;
+	border: 0;
+	outline: none;
+	resize: none;
+	overflow: hidden;
+	opacity: 0;
+	color: transparent;
+	background: transparent;
+	white-space: pre;
+	z-index: 10;
+}
+
+.editor-composition-text {
+	position: absolute;
+	display: none;
+	white-space: pre;
+	background: var(--mini-background);
+	border-bottom: 1px solid #aeafad;
+	z-index: 9;
+}
+
 /* ---- panel ---- */
 
 .part.panel {

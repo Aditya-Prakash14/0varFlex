@@ -35,6 +35,11 @@ export class EditorPart extends Part {
 		super('editor');
 	}
 
+	/** the container the editor widget (08) mounts into */
+	getContentContainer(): HTMLElement | undefined {
+		return this.contentArea;
+	}
+
 	override get minimumWidth(): number { return 300; }
 	override get maximumWidth(): number { return Number.POSITIVE_INFINITY; }
 	override get minimumHeight(): number { return 0; }

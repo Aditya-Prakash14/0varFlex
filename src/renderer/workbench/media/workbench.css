@@ -358,3 +358,75 @@ body {
 .statusbar-entry:hover {
 	background: rgba(255, 255, 255, 0.12);
 }
+
+/* ---- quick input (palette) ---- */
+
+.quick-input-widget {
+	position: absolute;
+	top: 30px;
+	left: 50%;
+	transform: translateX(-50%);
+	width: 520px;
+	max-width: 90vw;
+	z-index: 1000;
+	background: #252526;
+	border: 1px solid #454545;
+	border-radius: 6px 6px 4px 4px;
+	box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+	overflow: hidden;
+}
+
+.quick-input-box {
+	width: 100%;
+	box-sizing: border-box;
+	background: #3c3c3c;
+	color: var(--mini-foreground);
+	border: none;
+	outline: none;
+	font: inherit;
+	font-size: 13px;
+	padding: 6px 10px;
+}
+
+.quick-input-list {
+	position: relative;
+	overflow: hidden;
+	background: #252526;
+}
+
+.quick-input-spacer {
+	position: absolute;
+	top: 0;
+	left: 0;
+	width: 1px;
+}
+
+.quick-input-row {
+	position: absolute;
+	left: 0;
+	right: 0;
+	height: 22px;
+	box-sizing: border-box;
+	display: flex;
+	align-items: center;
+	padding: 0 10px;
+	color: var(--mini-foreground);
+	white-space: nowrap;
+	overflow: hidden;
+}
+
+.quick-input-row.active {
+	background: #04395e;
+}
+
+.quick-input-row-label {
+	flex: 1;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.quick-input-row-description {
+	margin-left: 8px;
+	color: var(--mini-watermark-dim);
+	font-size: 11px;
+}

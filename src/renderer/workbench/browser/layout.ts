@@ -7,11 +7,13 @@
 
 import { append, position, size, $ } from '../../base/browser/dom.js';
 import { Disposable } from '../../../common/base/common/lifecycle.js';
-import { URI } from '../../../common/base/common/uri.js';
 import { IView, Orientation, SplitView } from '../../base/browser/ui/splitview/splitview.js';
 import type { ILogService } from '../../../common/platform/log/common/log.js';
-import type { IFileIOChannel } from '../../../common/platform/fileIO/common/fileIO.js';
+import { IContextKey } from '../../platform/contextkey/common/contextkey.js';
+import { ContextKeyService } from '../../platform/contextkey/common/contextKeyService.js';
+import { PanelVisibleContext, SidebarVisibleContext } from '../contrib/layout/common/layoutContextKeys.js';
 import { Part } from './part.js';
+import { StateStore } from './stateStore.js';
 import { TitlebarPart } from './parts/titlebar/titlebarPart.js';
 import { ActivityBarPart } from './parts/activitybar/activitybarPart.js';
 import { SidebarPart } from './parts/sidebar/sidebarPart.js';
@@ -31,7 +33,8 @@ export const DEFAULT_WORKBENCH_LAYOUT_STATE: IWorkbenchLayoutState = {
 
 export interface IWorkbenchLayoutServices {
 	readonly logService: ILogService;
-	readonly fileIO: IFileIOChannel;
+	readonly stateStore: StateStore;
+	readonly contextKeyService: ContextKeyService;
 }
 
 /** Adapts a Part to an IView of a SplitView. Hidden parts can hold no space (min and max 0). */
@@ -104,9 +107,9 @@ export class WorkbenchLayout extends Disposable {
 	private readonly _hSplitContainerElement: HTMLElement;
 
 	private _state: IWorkbenchLayoutState;
-	private _statePath: string | undefined;
-	private _saveTimer: number | undefined;
 	private _stateApplied = false;
+	private readonly _sidebarVisibleKey: IContextKey<boolean>;
+	private readonly _panelVisibleKey: IContextKey<boolean>;
 
 	constructor(container: HTMLElement, private readonly _services: IWorkbenchLayoutServices) {
 		super();
@@ -174,25 +177,23 @@ export class WorkbenchLayout extends Disposable {
 		this.sidebar.setVisible(this._state.sidebar.visible);
 		this.panel.setVisible(this._state.panel.visible);
 
-		// activity bar → sidebar (clicking the active icon toggles)
-		this._register(this.activitybar.onDidClickIcon(id => {
-			if (id === 'explorer') {
-				this.toggleSidebar();
-			}
-		}));
+		// context keys track part visibility (bound at startup, updated on every change)
+		this._sidebarVisibleKey = SidebarVisibleContext.bindTo(_services.contextKeyService);
+		this._panelVisibleKey = PanelVisibleContext.bindTo(_services.contextKeyService);
+		this._updateContextKeys();
 
 		// sash changes → persisted state
 		this._register(this._hSplit.onDidSashChange(sizes => {
 			if (this.sidebar.visible) {
 				this._state.sidebar.width = sizes[0];
 			}
-			this._scheduleSave();
+			this._services.stateStore.set('layout', this._state);
 		}));
 		this._register(this._vSplit.onDidSashChange(sizes => {
 			if (this.panel.visible) {
 				this._state.panel.height = sizes[1];
 			}
-			this._scheduleSave();
+			this._services.stateStore.set('layout', this._state);
 		}));
 	}
 
@@ -239,8 +240,9 @@ export class WorkbenchLayout extends Disposable {
 		const width = visible ? Math.max(this._state.sidebar.width, this.sidebar.minimumWidth) : 0;
 		this.sidebar.setVisible(visible);
 		this._state.sidebar.visible = visible;
+		this._sidebarVisibleKey.set(visible);
 		this._hSplit.setViewSize(0, width);
-		this._scheduleSave();
+		this._services.stateStore.set('layout', this._state);
 	}
 
 	togglePanel(): void {
@@ -254,22 +256,19 @@ export class WorkbenchLayout extends Disposable {
 		const height = visible ? Math.max(this._state.panel.height, this.panel.minimumHeight) : 0;
 		this.panel.setVisible(visible);
 		this._state.panel.visible = visible;
+		this._panelVisibleKey.set(visible);
 		this._vSplit.setViewSize(1, height);
-		this._scheduleSave();
+		this._services.stateStore.set('layout', this._state);
 	}
 
-	// ---- persistence
+	// ---- persistence (via the shared provisional state file)
 	// shortcut: ad-hoc state file; replaced by StorageService in 06
 
-	async load(): Promise<void> {
+	load(): void {
 		try {
-			const userDataPath = await this._services.fileIO.getUserDataPath();
-			const statePath = URI.joinPath(URI.file(userDataPath), 'state.json').fsPath;
-			this._statePath = statePath;
-
-			const raw = await this._services.fileIO.readTextFile(statePath);
-			if (raw) {
-				const parsed = JSON.parse(raw) as Partial<IWorkbenchLayoutState>;
+			const stored = this._services.stateStore.get<IWorkbenchLayoutState>('layout');
+			if (stored) {
+				const parsed = stored as Partial<IWorkbenchLayoutState>;
 				if (parsed?.sidebar) {
 					if (typeof parsed.sidebar.width === 'number' && Number.isFinite(parsed.sidebar.width)) {
 						this._state.sidebar.width = Math.round(parsed.sidebar.width);
@@ -288,39 +287,15 @@ export class WorkbenchLayout extends Disposable {
 				}
 				this.sidebar.setVisible(this._state.sidebar.visible);
 				this.panel.setVisible(this._state.panel.visible);
+				this._updateContextKeys();
 			}
 		} catch (error) {
 			this._services.logService.warn(`workbench state could not be loaded: ${(error as Error).message}`);
 		}
 	}
 
-	override dispose(): void {
-		if (this._saveTimer !== undefined) {
-			window.clearTimeout(this._saveTimer);
-			this._saveTimer = undefined;
-			void this._save();
-		}
-		super.dispose();
-	}
-
-	private _scheduleSave(): void {
-		if (this._saveTimer !== undefined) {
-			window.clearTimeout(this._saveTimer);
-		}
-		this._saveTimer = window.setTimeout(() => {
-			this._saveTimer = undefined;
-			void this._save();
-		}, 300);
-	}
-
-	private async _save(): Promise<void> {
-		if (!this._statePath) {
-			return;
-		}
-		try {
-			await this._services.fileIO.writeTextFile(this._statePath, JSON.stringify(this._state, null, '\t'));
-		} catch (error) {
-			this._services.logService.warn(`workbench state could not be saved: ${(error as Error).message}`);
-		}
+	private _updateContextKeys(): void {
+		this._sidebarVisibleKey.set(this.sidebar.visible);
+		this._panelVisibleKey.set(this.panel.visible);
 	}
 }

@@ -28,18 +28,28 @@ class WindowChannelService implements IWindowChannel {
 	private readonly _onDidChangeFocus = new Emitter<boolean>();
 	/** menu commands are fired by the Electron menu (see sendMenuCommand) */
 	private readonly _onMenuCommand = new Emitter<WindowMenuCommand>();
+	private readonly _onDidChangeFullScreen = new Emitter<boolean>();
 
 	constructor(private readonly _window: BrowserWindow, store: DisposableStore) {
 		store.add(toDisposable(() => this._onDidChangeFocus.dispose()));
 		store.add(toDisposable(() => this._onMenuCommand.dispose()));
+		store.add(toDisposable(() => this._onDidChangeFullScreen.dispose()));
 
 		const onFocus = (): void => this._onDidChangeFocus.fire(true);
 		const onBlur = (): void => this._onDidChangeFocus.fire(false);
 		this._window.on('focus', onFocus);
 		this._window.on('blur', onBlur);
+
+		const onEnterFullScreen = (): void => this._onDidChangeFullScreen.fire(true);
+		const onLeaveFullScreen = (): void => this._onDidChangeFullScreen.fire(false);
+		this._window.on('enter-full-screen', onEnterFullScreen);
+		this._window.on('leave-full-screen', onLeaveFullScreen);
+
 		store.add(toDisposable(() => {
 			this._window.off('focus', onFocus);
 			this._window.off('blur', onBlur);
+			this._window.off('enter-full-screen', onEnterFullScreen);
+			this._window.off('leave-full-screen', onLeaveFullScreen);
 		}));
 
 		// this window's service is the routing target for menu commands
@@ -61,6 +71,19 @@ class WindowChannelService implements IWindowChannel {
 
 	get onDidMenuCommand(): Event<WindowMenuCommand> {
 		return this._onMenuCommand.event;
+	}
+
+	async toggleFullScreen(): Promise<boolean> {
+		this._window.setFullScreen(!this._window.isFullScreen());
+		return this._window.isFullScreen();
+	}
+
+	async isFullScreen(): Promise<boolean> {
+		return this._window.isFullScreen();
+	}
+
+	get onDidChangeFullScreen(): Event<boolean> {
+		return this._onDidChangeFullScreen.event;
 	}
 
 	fireMenuCommand(command: WindowMenuCommand): void {

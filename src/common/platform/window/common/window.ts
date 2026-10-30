@@ -16,4 +16,7 @@ export interface IWindowChannel {
 	// the "onSomething" naming convention is what ProxyChannel recognizes as an event
 	onDidChangeFocus: Event<boolean>;
 	onDidMenuCommand: Event<WindowMenuCommand>;
+	toggleFullScreen(): Promise<boolean>;
+	isFullScreen(): Promise<boolean>;
+	onDidChangeFullScreen: Event<boolean>;
 }

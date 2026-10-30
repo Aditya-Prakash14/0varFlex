@@ -1,6 +1,6 @@
 // src/main/parts/ipc/channels.ts — the main-side channel implementations: log, fileIO, window.
 
-import { app, BrowserWindow } from 'electron';
+import { app, BrowserWindow, shell } from 'electron';
 import { promises as fs } from 'node:fs';
 import { unwatchFile, watchFile } from 'node:fs';
 import * as os from 'node:os';
@@ -10,6 +10,7 @@ import { ChannelServer, IServerChannel, ProxyChannel } from '../../../common/bas
 import { ILogChannel } from '../../../common/platform/log/common/logIpc.js';
 import { LogLevel } from '../../../common/platform/log/common/log.js';
 import { IWindowChannel, IWindowInfo, WindowMenuCommand } from '../../../common/platform/window/common/window.js';
+import { StorageMainService } from '../../../common/platform/storage/common/storageIpc.js';
 import { IWindowContext } from './ipcMain.js';
 
 // --- log: everything the renderer logs lands on main's stdout, tagged once
@@ -86,6 +87,10 @@ class WindowChannelService implements IWindowChannel {
 		return this._window.isFullScreen();
 	}
 
+	async showItemInFolder(path: string): Promise<void> {
+		shell.showItemInFolder(path);
+	}
+
 	get onDidChangeFullScreen(): Event<boolean> {
 		return this._onDidChangeFullScreen.event;
 	}
@@ -117,6 +122,9 @@ class FileIOChannel implements IServerChannel<IWindowContext> {
 				break;
 			case 'getUserDataPath':
 				result = app.getPath('userData');
+				break;
+			case 'deleteFile':
+				await fs.unlink(args[0] as string).catch(() => { /* already gone */ });
 				break;
 			default:
 				throw new Error(`Unknown channel command: ${command}`);
@@ -175,8 +183,10 @@ export function sendMenuCommand(command: WindowMenuCommand): void {
 	windowServices.get(window.id)?.fireMenuCommand(command);
 }
 
-export function registerChannels(window: BrowserWindow, server: ChannelServer<IWindowContext>, store: DisposableStore): void {
+export function registerChannels(window: BrowserWindow, server: ChannelServer<IWindowContext>, store: DisposableStore, storage: StorageMainService): void {
 	server.registerChannel('log', ProxyChannel.fromService<IWindowContext>(new LogChannel(), store));
 	server.registerChannel('fileIO', new FileIOChannel());
 	server.registerChannel('window', ProxyChannel.fromService<IWindowContext>(new WindowChannelService(window, store), store));
+	// storage is app-level (not per window), but it rides the window's channel server
+	server.registerChannel('storage', storage);
 }

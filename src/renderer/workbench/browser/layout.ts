@@ -11,9 +11,10 @@ import { IView, Orientation, SplitView } from '../../base/browser/ui/splitview/s
 import type { ILogService } from '../../../common/platform/log/common/log.js';
 import { IContextKey } from '../../platform/contextkey/common/contextkey.js';
 import { ContextKeyService } from '../../platform/contextkey/common/contextKeyService.js';
+import { IConfigurationService } from '../../../common/platform/configuration/common/configuration.js';
+import { IStorageService, StorageScope } from '../../../common/platform/storage/common/storage.js';
 import { PanelVisibleContext, SidebarVisibleContext } from '../contrib/layout/common/layoutContextKeys.js';
 import { Part } from './part.js';
-import { StateStore } from './stateStore.js';
 import { TitlebarPart } from './parts/titlebar/titlebarPart.js';
 import { ActivityBarPart } from './parts/activitybar/activitybarPart.js';
 import { SidebarPart } from './parts/sidebar/sidebarPart.js';
@@ -33,7 +34,8 @@ export const DEFAULT_WORKBENCH_LAYOUT_STATE: IWorkbenchLayoutState = {
 
 export interface IWorkbenchLayoutServices {
 	readonly logService: ILogService;
-	readonly stateStore: StateStore;
+	readonly storage: IStorageService;
+	readonly configuration: IConfigurationService;
 	readonly contextKeyService: ContextKeyService;
 }
 
@@ -186,14 +188,14 @@ export class WorkbenchLayout extends Disposable {
 		this._register(this._hSplit.onDidSashChange(sizes => {
 			if (this.sidebar.visible) {
 				this._state.sidebar.width = sizes[0];
+				this._services.storage.store('workbench.layout.sidebar.width', sizes[0], StorageScope.APPLICATION);
 			}
-			this._services.stateStore.set('layout', this._state);
 		}));
 		this._register(this._vSplit.onDidSashChange(sizes => {
 			if (this.panel.visible) {
 				this._state.panel.height = sizes[1];
+				this._services.storage.store('workbench.layout.panel.height', sizes[1], StorageScope.APPLICATION);
 			}
-			this._services.stateStore.set('layout', this._state);
 		}));
 	}
 
@@ -242,7 +244,7 @@ export class WorkbenchLayout extends Disposable {
 		this._state.sidebar.visible = visible;
 		this._sidebarVisibleKey.set(visible);
 		this._hSplit.setViewSize(0, width);
-		this._services.stateStore.set('layout', this._state);
+		this._services.storage.store('workbench.layout.sidebar.visible', visible, StorageScope.APPLICATION);
 	}
 
 	togglePanel(): void {
@@ -258,40 +260,42 @@ export class WorkbenchLayout extends Disposable {
 		this._state.panel.visible = visible;
 		this._panelVisibleKey.set(visible);
 		this._vSplit.setViewSize(1, height);
-		this._services.stateStore.set('layout', this._state);
+		this._services.storage.store('workbench.layout.panel.visible', visible, StorageScope.APPLICATION);
 	}
 
-	// ---- persistence (via the shared provisional state file)
-	// shortcut: ad-hoc state file; replaced by StorageService in 06
+	// ---- persisted state (storage) + explicit settings precedence
+	// settings win over remembered state when explicitly set, then storage, then defaults
 
 	load(): void {
-		try {
-			const stored = this._services.stateStore.get<IWorkbenchLayoutState>('layout');
-			if (stored) {
-				const parsed = stored as Partial<IWorkbenchLayoutState>;
-				if (parsed?.sidebar) {
-					if (typeof parsed.sidebar.width === 'number' && Number.isFinite(parsed.sidebar.width)) {
-						this._state.sidebar.width = Math.round(parsed.sidebar.width);
-					}
-					if (typeof parsed.sidebar.visible === 'boolean') {
-						this._state.sidebar.visible = parsed.sidebar.visible;
-					}
-				}
-				if (parsed?.panel) {
-					if (typeof parsed.panel.height === 'number' && Number.isFinite(parsed.panel.height)) {
-						this._state.panel.height = Math.round(parsed.panel.height);
-					}
-					if (typeof parsed.panel.visible === 'boolean') {
-						this._state.panel.visible = parsed.panel.visible;
-					}
-				}
-				this.sidebar.setVisible(this._state.sidebar.visible);
-				this.panel.setVisible(this._state.panel.visible);
-				this._updateContextKeys();
-			}
-		} catch (error) {
-			this._services.logService.warn(`workbench state could not be loaded: ${(error as Error).message}`);
+		const storage = this._services.storage;
+
+		const storedSidebarWidth = storage.getNumber('workbench.layout.sidebar.width', StorageScope.APPLICATION);
+		if (storedSidebarWidth !== undefined) {
+			this._state.sidebar.width = storedSidebarWidth;
 		}
+		const sidebarVisibleSetting = this._services.configuration.inspect<boolean>('workbench.sideBar.visible').userValue;
+		const storedSidebarVisible = storage.getBoolean('workbench.layout.sidebar.visible', StorageScope.APPLICATION);
+		if (sidebarVisibleSetting !== undefined) {
+			this._state.sidebar.visible = sidebarVisibleSetting;
+		} else if (storedSidebarVisible !== undefined) {
+			this._state.sidebar.visible = storedSidebarVisible;
+		}
+
+		const storedPanelHeight = storage.getNumber('workbench.layout.panel.height', StorageScope.APPLICATION);
+		if (storedPanelHeight !== undefined) {
+			this._state.panel.height = storedPanelHeight;
+		}
+		const panelVisibleSetting = this._services.configuration.inspect<boolean>('workbench.panel.visible').userValue;
+		const storedPanelVisible = storage.getBoolean('workbench.layout.panel.visible', StorageScope.APPLICATION);
+		if (panelVisibleSetting !== undefined) {
+			this._state.panel.visible = panelVisibleSetting;
+		} else if (storedPanelVisible !== undefined) {
+			this._state.panel.visible = storedPanelVisible;
+		}
+
+		this.sidebar.setVisible(this._state.sidebar.visible);
+		this.panel.setVisible(this._state.panel.visible);
+		this._updateContextKeys();
 	}
 
 	private _updateContextKeys(): void {

@@ -19,6 +19,8 @@ export interface IFileIOChannel {
 	getHomePath(): Promise<string>;
 	getUserDataPath(): Promise<string>;
 
+	deleteFile(path: string): Promise<void>;
+
 	// per-path watch: the path travels as the `arg` of IServerChannel.listen
 	onDidChangeFile(path: string): Event<void>;
 }
@@ -45,6 +47,10 @@ export class FileIOChannelClient implements IFileIOChannel {
 
 	getUserDataPath(): Promise<string> {
 		return this.channel.call('getUserDataPath', []);
+	}
+
+	deleteFile(path: string): Promise<void> {
+		return this.channel.call('deleteFile', [path]);
 	}
 
 	onDidChangeFile(path: string): Event<void> {

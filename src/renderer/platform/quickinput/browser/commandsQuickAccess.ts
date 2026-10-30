@@ -20,7 +20,7 @@ interface ICommandQuickPick {
 	readonly metadata: ICommandMetadata;
 }
 
-const RECENTLY_USED_KEY = 'commands.recentlyUsed';
+const RECENTLY_USED_KEY = 'workbench.commandPalette.mru';
 const MAX_RECENT = 10;
 
 export class CommandsQuickAccessProvider {

@@ -19,4 +19,6 @@ export interface IWindowChannel {
 	toggleFullScreen(): Promise<boolean>;
 	isFullScreen(): Promise<boolean>;
 	onDidChangeFullScreen: Event<boolean>;
+	/** reveals a file in the OS file manager (Finder on macOS) */
+	showItemInFolder(path: string): Promise<void>;
 }

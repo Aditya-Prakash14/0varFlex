@@ -28,6 +28,8 @@ const configs = bundles.map(b => ({
 	bundle: true,
 	sourcemap: true,
 	external: ['electron'],
+	// jsonc-parser's UMD entry uses dynamic require; point at its ESM build
+	alias: { 'jsonc-parser': path.join(root, 'node_modules/jsonc-parser/lib/esm/main.js') },
 }));
 
 if (watch) {

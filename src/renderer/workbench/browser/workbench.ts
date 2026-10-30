@@ -7,6 +7,7 @@ import { append, $, ElementSizeObserver } from '../../base/browser/dom.js';
 import { Disposable } from '../../../common/base/common/lifecycle.js';
 import type { IWindowChannel, WindowMenuCommand } from '../../../common/platform/window/common/window.js';
 import { ICommandService } from '../../platform/commands/common/commands.js';
+import { OPEN_SETTINGS_JSON_ID } from '../contrib/configuration/browser/configurationActions.js';
 import { TOGGLE_PANEL_ID, TOGGLE_SIDEBAR_VISIBILITY_ID } from '../contrib/layout/browser/layoutActions.js';
 import { IWorkbenchLayoutServices, WorkbenchLayout } from './layout.js';
 
@@ -39,6 +40,8 @@ export class Workbench extends Disposable {
 		this._register(this.layout.activitybar.onDidClickIcon(id => {
 			if (id === 'explorer') {
 				void this._commandService.executeCommand(TOGGLE_SIDEBAR_VISIBILITY_ID);
+			} else if (id === 'settings') {
+				void this._commandService.executeCommand(OPEN_SETTINGS_JSON_ID);
 			}
 		}));
 	}

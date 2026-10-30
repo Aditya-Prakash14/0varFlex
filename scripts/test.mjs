@@ -19,6 +19,8 @@ await esbuild.build({
 	format: 'esm',
 	bundle: true,
 	sourcemap: true,
+	// jsonc-parser's UMD entry uses dynamic require; point at its ESM build
+	alias: { 'jsonc-parser': path.join(root, 'node_modules/jsonc-parser/lib/esm/main.js') },
 });
 
 const outputs = testFiles.map(f => path.join(out, f.replace(/\.ts$/, '.js')));

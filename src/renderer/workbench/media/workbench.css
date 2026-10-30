@@ -139,8 +139,16 @@ body {
 	display: flex;
 	flex-direction: column;
 	align-items: center;
+	height: 100%;
+	box-sizing: border-box;
 	padding-top: 4px;
+	padding-bottom: 6px;
 	gap: 2px;
+}
+
+/* the gear sits at the bottom of the column */
+.activitybar-item.settings {
+	margin-top: auto;
 }
 
 .activitybar-item {

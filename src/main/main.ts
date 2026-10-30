@@ -3,10 +3,13 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { MainProcessIpc } from './parts/ipc/ipcMain.js';
 import { registerChannels } from './parts/ipc/channels.js';
+import { StorageMainService } from '../common/platform/storage/common/storageIpc.js';
 import { installMenu } from './menu.js';
 
 // In modern JavaScript modules there is no __dirname; these two lines recreate it.
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+let storage: StorageMainService;
 
 function createWindow(): void {
 	const win = new BrowserWindow({
@@ -40,11 +43,13 @@ ipcMain.handle('mini:ping', (_event, payload: string) => ({
 const ipc = new MainProcessIpc((server, store, sender) => {
 	const window = BrowserWindow.fromWebContents(sender);
 	if (window) {
-		registerChannels(window, server, store);
+		registerChannels(window, server, store, storage);
 	}
 });
 
 void app.whenReady().then(() => {
+	// storage lives in main (one file per scope) — the renderer reads through the channel
+	storage = new StorageMainService(app.getPath('userData'));
 	installMenu();
 	createWindow();
 });

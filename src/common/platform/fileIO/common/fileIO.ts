@@ -15,8 +15,9 @@ export interface IFileIOChannel {
 	writeTextFile(path: string, content: string): Promise<void>;
 	exists(path: string): Promise<boolean>;
 
-	// the dev hook needs a place to write to
+	// the dev hooks and state persistence need a place to write to
 	getHomePath(): Promise<string>;
+	getUserDataPath(): Promise<string>;
 
 	// per-path watch: the path travels as the `arg` of IServerChannel.listen
 	onDidChangeFile(path: string): Event<void>;
@@ -40,6 +41,10 @@ export class FileIOChannelClient implements IFileIOChannel {
 
 	getHomePath(): Promise<string> {
 		return this.channel.call('getHomePath', []);
+	}
+
+	getUserDataPath(): Promise<string> {
+		return this.channel.call('getUserDataPath', []);
 	}
 
 	onDidChangeFile(path: string): Event<void> {

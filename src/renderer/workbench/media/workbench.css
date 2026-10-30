@@ -1,0 +1,360 @@
+/* src/renderer/workbench/media/workbench.css — the workbench shell.
+   Theme basics: the first token set (VS Code's real theme system is a course delta). */
+
+:root {
+	--mini-background: #1e1e1e;
+	--mini-foreground: #cccccc;
+	--mini-border: #2b2b2b;
+	--mini-accent: #0078d4;
+	--mini-titlebar-background: #3c3c3c;
+	--mini-titlebar-foreground: #cccccc;
+	--mini-activitybar-background: #333333;
+	--mini-activitybar-foreground: #868686;
+	--mini-activitybar-active: #ffffff;
+	--mini-sidebar-background: #252526;
+	--mini-panel-background: #1e1e1e;
+	--mini-statusbar-background: var(--mini-accent);
+	--mini-statusbar-foreground: #ffffff;
+	--mini-sash-hover: var(--mini-accent);
+	--mini-watermark: rgba(255, 255, 255, 0.08);
+	--mini-watermark-dim: #6e6e6e;
+	--mini-titlebar-height: 30px;
+}
+
+html, body {
+	margin: 0;
+	height: 100%;
+	overflow: hidden;
+}
+
+body {
+	background: var(--mini-background);
+	color: var(--mini-foreground);
+	font: 13px -apple-system, 'Helvetica Neue', 'Segoe UI', sans-serif;
+	cursor: default;
+	-webkit-user-select: none;
+	user-select: none;
+}
+
+.workbench {
+	position: absolute;
+	inset: 0;
+	overflow: hidden;
+}
+
+.part {
+	position: absolute;
+	overflow: hidden;
+}
+
+.part.hidden {
+	display: none;
+}
+
+.content {
+	position: absolute;
+	overflow: hidden;
+}
+
+/* ---- split views and sashes ---- */
+
+.split-view {
+	position: absolute;
+	overflow: hidden;
+}
+
+.sash-container {
+	position: absolute;
+	inset: 0;
+	pointer-events: none;
+}
+
+.sash {
+	position: absolute;
+	pointer-events: auto;
+	z-index: 10;
+	touch-action: none;
+	transition: background 0.1s ease-out;
+}
+
+.sash.col {
+	cursor: col-resize;
+}
+
+.sash.row {
+	cursor: row-resize;
+}
+
+.sash:hover,
+.sash:active {
+	background: var(--mini-sash-hover);
+}
+
+/* ---- title bar ---- */
+
+.part.titlebar {
+	background: var(--mini-titlebar-background);
+	border-bottom: 1px solid var(--mini-border);
+	/* the bar itself is the window drag region */
+	-webkit-app-region: drag;
+}
+
+.titlebar-content {
+	display: flex;
+	align-items: center;
+	height: 100%;
+	/* keep clear of the macOS traffic lights */
+	padding-left: 80px;
+}
+
+.titlebar-left,
+.titlebar-right {
+	flex: 1;
+	display: flex;
+	align-items: center;
+}
+
+.titlebar-center {
+	display: flex;
+	align-items: center;
+	color: var(--mini-titlebar-foreground);
+	font-size: 12px;
+}
+
+/* interactive children must opt out of the drag region */
+.titlebar-content button,
+.titlebar-content input,
+.titlebar-content a {
+	-webkit-app-region: no-drag;
+}
+
+/* ---- activity bar ---- */
+
+.part.activitybar {
+	background: var(--mini-activitybar-background);
+	border-right: 1px solid var(--mini-border);
+}
+
+.activitybar-content {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	padding-top: 4px;
+	gap: 2px;
+}
+
+.activitybar-item {
+	position: relative;
+	width: 48px;
+	height: 48px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	color: var(--mini-activitybar-foreground);
+}
+
+.activitybar-item:hover {
+	color: #c5c5c5;
+}
+
+.activitybar-item.active {
+	color: var(--mini-activitybar-active);
+}
+
+.activitybar-item.active::before {
+	content: '';
+	position: absolute;
+	left: 0;
+	top: 8px;
+	bottom: 8px;
+	width: 2px;
+	background: var(--mini-activitybar-active);
+}
+
+.activitybar-item.disabled {
+	opacity: 0.4;
+}
+
+.activitybar-item svg {
+	width: 24px;
+	height: 24px;
+	fill: currentColor;
+}
+
+/* ---- sidebar ---- */
+
+.part.sidebar {
+	background: var(--mini-sidebar-background);
+	border-right: 1px solid var(--mini-border);
+}
+
+.sidebar-header {
+	height: 35px;
+	display: flex;
+	align-items: center;
+	padding-left: 20px;
+	font-size: 11px;
+	text-transform: uppercase;
+	letter-spacing: 1px;
+	color: #bbbbbb;
+}
+
+.sidebar-content {
+	position: absolute;
+	top: 35px;
+	left: 0;
+	right: 0;
+	bottom: 0;
+	overflow: hidden;
+}
+
+.sidebar-placeholder {
+	padding: 10px 20px;
+	font-size: 12px;
+	color: var(--mini-watermark-dim);
+	line-height: 1.5;
+}
+
+/* ---- editor ---- */
+
+.part.editor {
+	background: var(--mini-background);
+}
+
+.editor-content {
+	position: absolute;
+	inset: 0;
+	overflow: hidden;
+}
+
+.editor-watermark {
+	position: absolute;
+	inset: 0;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	pointer-events: none;
+}
+
+.watermark-title {
+	font-size: 40px;
+	font-weight: 200;
+	color: var(--mini-watermark);
+	margin-bottom: 18px;
+}
+
+.watermark-entry {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	width: 280px;
+	margin-top: 8px;
+	color: var(--mini-watermark-dim);
+	font-size: 13px;
+}
+
+.watermark-icon {
+	display: flex;
+	align-items: center;
+}
+
+.watermark-icon svg {
+	width: 16px;
+	height: 16px;
+	fill: var(--mini-watermark-dim);
+}
+
+.watermark-label {
+	flex: 1;
+}
+
+.watermark-keys {
+	display: flex;
+	gap: 3px;
+}
+
+.watermark-keys .key {
+	display: inline-block;
+	min-width: 12px;
+	text-align: center;
+	background: rgba(255, 255, 255, 0.09);
+	border-radius: 3px;
+	padding: 1px 5px;
+	font-size: 11px;
+	font-family: inherit;
+	color: #9d9d9d;
+}
+
+/* ---- panel ---- */
+
+.part.panel {
+	background: var(--mini-panel-background);
+	border-top: 1px solid var(--mini-border);
+}
+
+.panel-header {
+	height: 35px;
+	display: flex;
+	align-items: stretch;
+	border-bottom: 1px solid var(--mini-border);
+}
+
+.panel-tab {
+	display: flex;
+	align-items: center;
+	padding: 0 12px 0 20px;
+	font-size: 11px;
+	letter-spacing: 1px;
+	border-right: 1px solid var(--mini-border);
+}
+
+.panel-tab.disabled {
+	color: var(--mini-watermark-dim);
+}
+
+.panel-content {
+	position: absolute;
+	top: 36px;
+	left: 0;
+	right: 0;
+	bottom: 0;
+	overflow: hidden;
+}
+
+.panel-placeholder {
+	padding: 10px 20px;
+	font-size: 12px;
+	color: var(--mini-watermark-dim);
+}
+
+/* ---- status bar ---- */
+
+.part.statusbar {
+	background: var(--mini-statusbar-background);
+	color: var(--mini-statusbar-foreground);
+}
+
+.statusbar-content {
+	display: flex;
+	justify-content: space-between;
+	height: 100%;
+	font-size: 12px;
+}
+
+.statusbar-left,
+.statusbar-right {
+	display: flex;
+	align-items: stretch;
+}
+
+.statusbar-entry {
+	display: flex;
+	align-items: center;
+	padding: 0 8px;
+	white-space: nowrap;
+}
+
+.statusbar-entry:hover {
+	background: rgba(255, 255, 255, 0.12);
+}

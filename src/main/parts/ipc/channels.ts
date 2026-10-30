@@ -1,6 +1,6 @@
 // src/main/parts/ipc/channels.ts — the main-side channel implementations: log, fileIO, window.
 
-import { BrowserWindow } from 'electron';
+import { app, BrowserWindow } from 'electron';
 import { promises as fs } from 'node:fs';
 import { unwatchFile, watchFile } from 'node:fs';
 import * as os from 'node:os';
@@ -9,7 +9,7 @@ import { DisposableStore, toDisposable } from '../../../common/base/common/lifec
 import { ChannelServer, IServerChannel, ProxyChannel } from '../../../common/base/parts/ipc/ipc.js';
 import { ILogChannel } from '../../../common/platform/log/common/logIpc.js';
 import { LogLevel } from '../../../common/platform/log/common/log.js';
-import { IWindowChannel, IWindowInfo } from '../../../common/platform/window/common/window.js';
+import { IWindowChannel, IWindowInfo, WindowMenuCommand } from '../../../common/platform/window/common/window.js';
 import { IWindowContext } from './ipcMain.js';
 
 // --- log: everything the renderer logs lands on main's stdout, tagged once
@@ -26,9 +26,12 @@ class LogChannel implements ILogChannel {
 class WindowChannelService implements IWindowChannel {
 
 	private readonly _onDidChangeFocus = new Emitter<boolean>();
+	/** menu commands are fired by the Electron menu (see sendMenuCommand) */
+	private readonly _onMenuCommand = new Emitter<WindowMenuCommand>();
 
 	constructor(private readonly _window: BrowserWindow, store: DisposableStore) {
 		store.add(toDisposable(() => this._onDidChangeFocus.dispose()));
+		store.add(toDisposable(() => this._onMenuCommand.dispose()));
 
 		const onFocus = (): void => this._onDidChangeFocus.fire(true);
 		const onBlur = (): void => this._onDidChangeFocus.fire(false);
@@ -38,6 +41,10 @@ class WindowChannelService implements IWindowChannel {
 			this._window.off('focus', onFocus);
 			this._window.off('blur', onBlur);
 		}));
+
+		// this window's service is the routing target for menu commands
+		windowServices.set(this._window.id, this);
+		store.add(toDisposable(() => windowServices.delete(this._window.id)));
 	}
 
 	async getInfo(): Promise<IWindowInfo> {
@@ -50,6 +57,14 @@ class WindowChannelService implements IWindowChannel {
 
 	get onDidChangeFocus(): Event<boolean> {
 		return this._onDidChangeFocus.event;
+	}
+
+	get onDidMenuCommand(): Event<WindowMenuCommand> {
+		return this._onMenuCommand.event;
+	}
+
+	fireMenuCommand(command: WindowMenuCommand): void {
+		this._onMenuCommand.fire(command);
 	}
 }
 
@@ -72,6 +87,9 @@ class FileIOChannel implements IServerChannel<IWindowContext> {
 				break;
 			case 'getHomePath':
 				result = os.homedir();
+				break;
+			case 'getUserDataPath':
+				result = app.getPath('userData');
 				break;
 			default:
 				throw new Error(`Unknown channel command: ${command}`);
@@ -117,6 +135,18 @@ function watchPath(path: string): Event<void> {
 }
 
 // --- registration: called once per window when its IPC server comes up
+
+/** window id → the window's service, so the app menu can route commands. */
+const windowServices = new Map<number, WindowChannelService>();
+
+/** Send a menu command to the focused window's renderer (no-op if no window is served yet). */
+export function sendMenuCommand(command: WindowMenuCommand): void {
+	const window = BrowserWindow.getFocusedWindow();
+	if (!window) {
+		return;
+	}
+	windowServices.get(window.id)?.fireMenuCommand(command);
+}
 
 export function registerChannels(window: BrowserWindow, server: ChannelServer<IWindowContext>, store: DisposableStore): void {
 	server.registerChannel('log', ProxyChannel.fromService<IWindowContext>(new LogChannel(), store));

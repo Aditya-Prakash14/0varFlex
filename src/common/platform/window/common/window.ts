@@ -8,8 +8,12 @@ export interface IWindowInfo {
 	readonly focused: boolean;
 }
 
+/** Commands the Electron menu sends to the window's renderer. */
+export type WindowMenuCommand = 'toggleSidebar' | 'togglePanel';
+
 export interface IWindowChannel {
 	getInfo(): Promise<IWindowInfo>;
 	// the "onSomething" naming convention is what ProxyChannel recognizes as an event
 	onDidChangeFocus: Event<boolean>;
+	onDidMenuCommand: Event<WindowMenuCommand>;
 }

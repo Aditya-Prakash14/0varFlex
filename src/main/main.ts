@@ -3,6 +3,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { MainProcessIpc } from './parts/ipc/ipcMain.js';
 import { registerChannels } from './parts/ipc/channels.js';
+import { installMenu } from './menu.js';
 
 // In modern JavaScript modules there is no __dirname; these two lines recreate it.
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -13,6 +14,10 @@ function createWindow(): void {
 		height: 720,
 		show: false,                 // don't show until the page has painted…
 		backgroundColor: '#1e1e1e',  // …and paint dark, so there is no white flash
+		// exercise 03: the custom title bar. `hiddenInset` keeps the macOS traffic lights and
+		// tucks them into our title bar (no explicit trafficLightPosition in this VS Code
+		// revision — the title bar CSS reserves room with a left padding instead)
+		titleBarStyle: 'hiddenInset',
 		webPreferences: {
 			contextIsolation: true,  // wall between web page and preload internals
 			nodeIntegration: false,  // the web page gets NO Node.js powers
@@ -39,7 +44,10 @@ const ipc = new MainProcessIpc((server, store, sender) => {
 	}
 });
 
-void app.whenReady().then(createWindow);
+void app.whenReady().then(() => {
+	installMenu();
+	createWindow();
+});
 
 app.on('window-all-closed', () => {
 	ipc.dispose();

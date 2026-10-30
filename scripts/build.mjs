@@ -8,9 +8,10 @@ const root = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const out = path.join(root, 'out');
 const watch = process.argv.includes('--watch');
 
-// 1. make sure out/ exists, and copy the static html file into it
+// 1. make sure out/ exists, and copy the static files into it
 await mkdir(out, { recursive: true });
 await cp(path.join(root, 'src/renderer/index.html'), path.join(out, 'index.html'));
+await cp(path.join(root, 'src/renderer/workbench/media/workbench.css'), path.join(out, 'workbench.css'));
 
 // 2. three bundles: main process, preload, renderer
 const bundles = [

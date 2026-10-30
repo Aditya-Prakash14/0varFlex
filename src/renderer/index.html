@@ -4,32 +4,9 @@
 	<meta charset="utf-8" />
 	<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'" />
 	<title>mini-vscode</title>
-	<style>
-		html, body { margin: 0; height: 100%; }
-		body {
-			background: #1e1e1e;
-			color: #cccccc;
-			font: 13px -apple-system, 'Helvetica Neue', sans-serif;
-			display: grid;
-			place-items: center;
-		}
-		#app { text-align: center; }
-		#ipc-test {
-			margin-top: 12px;
-			color: inherit;
-			background: #3c3c3c;
-			font: inherit;
-			border: 1px solid #555555;
-			border-radius: 3px;
-			padding: 4px 10px;
-		}
-	</style>
+	<link rel="stylesheet" href="./workbench.css" />
 </head>
 <body>
-	<div id="app">
-		<div id="status">loading…</div>
-		<button id="ipc-test">run ipc dev checks</button>
-	</div>
 	<script type="module" src="./renderer.js"></script>
 </body>
 </html>

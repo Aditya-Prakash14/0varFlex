@@ -1,0 +1,19 @@
+{
+	"name": "mini-vscode",
+	"version": "0.0.1",
+	"private": true,
+	"type": "module",
+	"main": "out/main.js",
+	"scripts": {
+		"build": "node scripts/build.mjs",
+		"watch": "node scripts/build.mjs --watch",
+		"test": "node scripts/test.mjs",
+		"start": "npm run build && electron ."
+	},
+  "devDependencies": {
+    "@types/node": "^26.6.6",
+    "electron": "^45.1.0",
+    "esbuild": "^0.28.2",
+    "typescript": "^7.0.2"
+  }
+}

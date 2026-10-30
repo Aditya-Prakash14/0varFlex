@@ -1,0 +1,23 @@
+<!doctype html>
+<html>
+<head>
+	<meta charset="utf-8" />
+	<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'" />
+	<title>mini-vscode</title>
+	<style>
+		html, body { margin: 0; height: 100%; }
+		body {
+			background: #1e1e1e;
+			color: #cccccc;
+			font: 13px -apple-system, 'Helvetica Neue', sans-serif;
+			display: grid;
+			place-items: center;
+		}
+		#app { text-align: center; }
+	</style>
+</head>
+<body>
+	<div id="app">loading…</div>
+	<script type="module" src="./renderer.js"></script>
+</body>
+</html>

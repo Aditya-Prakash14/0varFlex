@@ -15,7 +15,7 @@ import { BrowserStorageService } from '../common/platform/storage/common/storage
 import { addDisposableListener } from './base/browser/dom.js';
 import { EditorOptionsService } from './editor/browser/config.js';
 import { Selection } from './editor/browser/core/selection.js';
-import { EditorWidget, registerEditorCommands } from './editor/browser/editorWidget.js';
+import { registerEditorCommands } from './editor/browser/editorWidget.js';
 import { CommandMetadata, CommandsRegistry, ICommandService } from './platform/commands/common/commands.js';
 import { ContextKeyExpr, RawContextKey } from './platform/contextkey/common/contextkey.js';
 import { ContextKeyService } from './platform/contextkey/common/contextKeyService.js';
@@ -28,10 +28,14 @@ import { CommandsQuickAccessProvider } from './platform/quickinput/browser/comma
 import { QuickInputController } from './platform/quickinput/browser/quickInput.js';
 import { Workbench } from './workbench/browser/workbench.js';
 import { StatusbarAlignment } from './workbench/browser/parts/statusbar/statusbarPart.js';
+import { registerEditorActions } from './workbench/browser/parts/editor/editorActions.js';
+import { TextEditorPane } from './workbench/browser/parts/editor/editorPanes.js';
 import { registerConfigurationActions } from './workbench/contrib/configuration/browser/configurationActions.js';
 import { registerDefaultConfigurations } from './workbench/contrib/configuration/browser/defaultSettings.js';
 import { registerLayoutCommands, SHOW_ALL_COMMANDS_ID } from './workbench/contrib/layout/browser/layoutActions.js';
 import { CommandService } from './workbench/services/commands/common/commandService.js';
+import { CodeEditorService } from './workbench/services/editor/browser/codeEditorService.js';
+import { EditorService } from './workbench/services/editor/browser/editorService.js';
 import { MainProcessChannelClient } from './parts/ipc/ipcRenderer.js';
 
 // shortcut: watch-lite (fs.watchFile polling from 02) — a real FileWatcher interface arrives in 10
@@ -153,20 +157,24 @@ async function main(): Promise<void> {
 	addDisposableListener(window, 'beforeunload', () => { void storage.flush(WillSaveStateReason.Shutdown); });
 	windowChannel.onDidChangeFocus(focused => { if (!focused) { void storage.flush(); } });
 
-	// ---- the workbench (exercise 03)
+	// ---- the workbench (exercise 03); 09 adds the editor services it consumes
+	const editorOptions = new EditorOptionsService(configurationService);
+	const codeEditorService = new CodeEditorService();
 	const workbench = new Workbench(document.body, {
 		logService,
 		storage,
 		configuration: configurationService,
 		contextKeyService,
 		commandService,
-		windowChannel
+		windowChannel,
+		fileIO,
+		editorOptions,
+		codeEditorService
 	});
 	await workbench.start();
 
-	// ---- layout + configuration commands (04/06)
+	// ---- layout commands (04/06)
 	registerLayoutCommands(workbench.layout, windowChannel);
-	registerConfigurationActions(configurationService.getSettingsPath(), windowChannel);
 
 	// the palette, with MRU persisted through storage (06 moved it off the ad-hoc file)
 	const quickInput = new QuickInputController();
@@ -257,37 +265,63 @@ async function main(): Promise<void> {
 	};
 	keybindingService.onDidChangeChordState(updateChordIndicator);
 
-	// ---- the editor widget (exercise 08): one widget in the editor part, demo document open
-	const editorOptions = new EditorOptionsService(configurationService);
-	const editorContainer = workbench.layout.editor.getContentContainer();
-	let editor: EditorWidget | null = null;
-	if (editorContainer) {
-		editor = new EditorWidget(editorContainer, {
-			options: editorOptions,
-			configuration: configurationService,
-			contextKeyService
-		});
-		editor.setModel(new TextModel(WELCOME_TEXT));
-		registerEditorCommands(editor);
-		keybindingService.rebuild();
-		editor.focus();
+	// ---- the editor service (exercise 09): groups, tabs, dirty lifecycle and the model
+	// registry. The widget (08) now lives inside panes, one per group showing an input.
+	const editorService = new EditorService(workbench.layout.editor, codeEditorService, fileIO, logService, {
+		options: editorOptions,
+		configuration: configurationService,
+		contextKeyService,
+		codeEditorService
+	});
+	workbench.layout.editor.onDidRequestCloseEditor(({ input, group }) => {
+		void editorService.closeEditor(input, group);
+	});
 
-		// render stats in the status bar (the 100k-line gate reads this)
-		let lastPerfText = '';
-		window.setInterval(() => {
-			const stats = editor!.getPerfStats();
-			const text = `render avg ${stats.averageRenderMs.toFixed(2)}ms · last ${stats.lastRenderMs.toFixed(2)}ms · ${stats.lastRenderedLines}/${stats.totalLines} lines`;
-			if (text !== lastPerfText) {
-				lastPerfText = text;
-				workbench.layout.statusbar.removeEntry('debug.editor');
-				workbench.layout.statusbar.addEntry('debug.editor', {
-					text,
-					alignment: StatusbarAlignment.RIGHT,
-					priority: 59
-				});
-			}
-		}, 500);
+	const getActiveWidget = () => {
+		const pane = workbench.layout.editor.activeGroup.activePane;
+		return pane instanceof TextEditorPane ? pane.getWidget() : null;
+	};
+
+	registerEditorCommands(getActiveWidget);
+	registerEditorActions(editorService, workbench.layout.editor, fileIO, userDataPath);
+	registerConfigurationActions(configurationService.getSettingsPath(), fsPath => {
+		void editorService.openEditor({ resource: URI.file(fsPath) });
+	});
+	keybindingService.rebuild();
+
+	// render stats in the status bar (the 100k-line gate reads this)
+	let lastPerfText = '';
+	window.setInterval(() => {
+		const stats = getActiveWidget()?.getPerfStats();
+		const text = stats
+			? `render avg ${stats.averageRenderMs.toFixed(2)}ms · last ${stats.lastRenderMs.toFixed(2)}ms · ${stats.lastRenderedLines}/${stats.totalLines} lines`
+			: 'editor: empty group';
+		if (text !== lastPerfText) {
+			lastPerfText = text;
+			workbench.layout.statusbar.removeEntry('debug.editor');
+			workbench.layout.statusbar.addEntry('debug.editor', {
+				text,
+				alignment: StatusbarAlignment.RIGHT,
+				priority: 59
+			});
+		}
+	}, 500);
+
+	// ---- first real open paths (exercise 09): CLI argv seed, and the veto-able window close
+	const openedFile = await windowChannel.getOpenedFile();
+	if (openedFile) {
+		await editorService.openEditor({ resource: URI.file(openedFile) });
+		logService.info(`opened file from argv: ${openedFile}`);
+	} else {
+		logService.info('no file on argv — the editor part starts with its watermark');
 	}
+
+	windowChannel.onWillCloseWindow(() => {
+		void (async () => {
+			const proceed = await editorService.confirmCloseAllDirty();
+			await windowChannel.resolveClose(proceed);
+		})();
+	});
 
 	// ---- debug readout: proves settings live reload until 08/10 replace it with real consumers
 	// shortcut: temporary; dies when editor/sidebar read these settings for real
@@ -309,6 +343,126 @@ async function main(): Promise<void> {
 	updateConfigDebug();
 
 	// ---- dev hook for the acceptance checks: drive commands, keybindings and services
+	const devEditor = {
+		/** 09: the widget is whoever the active group shows (08's hook shape kept working) */
+		get widget() {
+			return getActiveWidget();
+		},
+		type: (text: string) => getActiveWidget()?.type(text),
+		insertText: (text: string) => getActiveWidget()?.type(text),
+		undo: () => getActiveWidget()?.undo(),
+		redo: () => getActiveWidget()?.redo(),
+		getValue: () => getActiveWidget()?.getModel()?.getValue() ?? '',
+		getSelection: () => {
+			const widget = getActiveWidget();
+			if (!widget) {
+				return null;
+			}
+			const selection = widget.getSelection();
+			return {
+				anchor: { lineNumber: selection.anchorLineNumber, column: selection.anchorColumn },
+				active: { lineNumber: selection.activeLineNumber, column: selection.activeColumn },
+				isEmpty: selection.isEmpty()
+			};
+		},
+		setSelectionByPositions: (anchorLineNumber: number, anchorColumn: number, activeLineNumber: number, activeColumn: number) =>
+			getActiveWidget()?.setSelection(new Selection(anchorLineNumber, anchorColumn, activeLineNumber, activeColumn)),
+		getPerfStats: () => getActiveWidget()?.getPerfStats() ?? null,
+		renderNow: () => getActiveWidget()?.view.render(),
+		openDemoFile: () => {
+			const resource = URI.joinPath(URI.file(userDataPath), 'demo-welcome.ts');
+			codeEditorService.createModel(resource, WELCOME_TEXT);
+			const opening = editorService.openEditor({ resource });
+			return opening;
+		},
+		openPerformanceFile: (lineCount: number = 100000) => {
+			return (async () => {
+				const resource = URI.joinPath(URI.file(userDataPath), `perf-${lineCount}.ts`);
+				const started = performance.now();
+				codeEditorService.createModel(resource, generateLargeText(lineCount));
+				await editorService.openEditor({ resource });
+				getActiveWidget()?.view.render();
+				return {
+					openMs: performance.now() - started,
+					stats: getActiveWidget()?.getPerfStats() ?? null
+				};
+			})();
+		}
+	};
+
+	const devEditors = {
+		openFile: (fsPath: string, selection?: { lineNumber: number; column: number }) =>
+			editorService.openEditor({ resource: URI.file(fsPath), options: selection ? { selection } : undefined }),
+		closeActive: () => {
+			const input = editorService.activeInput;
+			return input ? editorService.closeEditor(input, workbench.layout.editor.activeGroup) : Promise.resolve(false);
+		},
+		closeInput: (fsPath: string) => {
+			const input = editorService.getInput(URI.file(fsPath));
+			return input ? editorService.closeEditor(input) : Promise.resolve(false);
+		},
+		split: () => editorService.splitEditor(),
+		saveActive: () => editorService.saveActive(),
+		requestCloseWindow: () => windowChannel.requestCloseWindow(),
+		getState: () => editorService.getState(),
+		getActiveResource: () => editorService.activeInput?.getResource()?.fsPath ?? null,
+		isActiveDirty: () => editorService.activeInput?.isDirty() ?? false,
+		getDirtyNames: () => editorService.getDirtyInputs().map(input => input.getName()),
+		getModelCount: () => codeEditorService.modelCount(),
+		getRefCount: (fsPath: string) => codeEditorService.refCount(URI.file(fsPath)),
+		/** per group: the active pane's widget state (scroll + selection) */
+		getPaneState: () => workbench.layout.editor.groups.map(group => {
+			const pane = group.activePane;
+			if (pane instanceof TextEditorPane) {
+				const widget = pane.getWidget();
+				const selection = widget.getSelection();
+				return {
+					group: group.id,
+					active: group === workbench.layout.editor.activeGroup,
+					name: group.activeEditor?.getName() ?? null,
+					scrollTop: widget.view.getScrollTop(),
+					selection: { lineNumber: selection.activeLineNumber, column: selection.activeColumn },
+					selectionEmpty: selection.isEmpty()
+				};
+			}
+			return { group: group.id, active: group === workbench.layout.editor.activeGroup, name: group.activeEditor?.getName() ?? null, scrollTop: -1, selection: null, selectionEmpty: true };
+		}),
+		selectTab: (groupIndex: number, tabIndex: number) => {
+			const group = workbench.layout.editor.groups[groupIndex];
+			const input = group?.editors[tabIndex];
+			if (group && input) {
+				group.setActive(input, { focus: true });
+			}
+		},
+		getDialogState: () => {
+			const dialog = document.querySelector('.confirm-dialog');
+			if (!dialog) {
+				return null;
+			}
+			const focused = document.activeElement as HTMLElement | null;
+			return {
+				message: dialog.querySelector('.confirm-dialog-message')?.textContent ?? '',
+				buttons: [...dialog.querySelectorAll('.confirm-dialog-button')].map(button => (button as HTMLElement).textContent),
+				focused: focused?.textContent ?? null
+			};
+		},
+		/** raw widget of a group's active pane (view-state assertions) */
+		getWidget: (groupIndex: number) => {
+			const pane = workbench.layout.editor.groups[groupIndex]?.activePane;
+			return pane instanceof TextEditorPane ? pane.getWidget() : null;
+		},
+		clickDialogButton: (label: string) => {
+			const buttons = [...document.querySelectorAll('.confirm-dialog-button')] as HTMLElement[];
+			const button = buttons.find(candidate => candidate.textContent === label);
+			button?.click();
+			return !!button;
+		},
+		pressDialogEscape: () => {
+			const dialog = document.querySelector('.confirm-dialog');
+			dialog?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+		}
+	};
+
 	(window as any).__miniDev = {
 		executeCommand: (id: string, ...args: unknown[]) => commandService.executeCommand(id, ...args),
 		contextKeyService,
@@ -323,39 +477,8 @@ async function main(): Promise<void> {
 			},
 			reloadUserBindings: loadUserKeybindings
 		},
-		editor: editor ? {
-			widget: editor,
-			type: (text: string) => editor!.type(text),
-			insertText: (text: string) => editor!.type(text),
-			undo: () => editor!.undo(),
-			redo: () => editor!.redo(),
-			getValue: () => editor!.getModel()?.getValue() ?? '',
-			getSelection: () => {
-				const selection = editor!.getSelection();
-				return {
-					anchor: { lineNumber: selection.anchorLineNumber, column: selection.anchorColumn },
-					active: { lineNumber: selection.activeLineNumber, column: selection.activeColumn },
-					isEmpty: selection.isEmpty()
-				};
-			},
-			setSelectionByPositions: (anchorLineNumber: number, anchorColumn: number, activeLineNumber: number, activeColumn: number) =>
-				editor!.setSelection(new Selection(anchorLineNumber, anchorColumn, activeLineNumber, activeColumn)),
-			getPerfStats: () => editor!.getPerfStats(),
-			renderNow: () => editor!.view.render(),
-			openPerformanceFile: (lineCount: number = 100000) => {
-				const started = performance.now();
-				editor!.setModel(new TextModel(generateLargeText(lineCount)));
-				editor!.view.render();
-				return {
-					openMs: performance.now() - started,
-					stats: editor!.getPerfStats()
-				};
-			},
-			openDemoFile: () => {
-				editor!.setModel(new TextModel(WELCOME_TEXT));
-				editor!.view.render();
-			}
-		} : null
+		editor: devEditor,
+		editors: devEditors
 	};
 
 	logService.info('workbench created');

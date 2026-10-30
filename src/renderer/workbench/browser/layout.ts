@@ -9,10 +9,14 @@ import { append, position, size, $ } from '../../base/browser/dom.js';
 import { Disposable } from '../../../common/base/common/lifecycle.js';
 import { IView, Orientation, SplitView } from '../../base/browser/ui/splitview/splitview.js';
 import type { ILogService } from '../../../common/platform/log/common/log.js';
+import type { IFileIOChannel } from '../../../common/platform/fileIO/common/fileIO.js';
 import { IContextKey } from '../../platform/contextkey/common/contextkey.js';
 import { ContextKeyService } from '../../platform/contextkey/common/contextKeyService.js';
+import type { ICommandService } from '../../platform/commands/common/commands.js';
 import { IConfigurationService } from '../../../common/platform/configuration/common/configuration.js';
 import { IStorageService, StorageScope } from '../../../common/platform/storage/common/storage.js';
+import { EditorOptionsService } from '../../editor/browser/config.js';
+import { CodeEditorService } from '../services/editor/browser/codeEditorService.js';
 import { PanelVisibleContext, SidebarVisibleContext } from '../contrib/layout/common/layoutContextKeys.js';
 import { Part } from './part.js';
 import { TitlebarPart } from './parts/titlebar/titlebarPart.js';
@@ -37,6 +41,10 @@ export interface IWorkbenchLayoutServices {
 	readonly storage: IStorageService;
 	readonly configuration: IConfigurationService;
 	readonly contextKeyService: ContextKeyService;
+	readonly commandService: ICommandService;
+	readonly fileIO: IFileIOChannel;
+	readonly editorOptions: EditorOptionsService;
+	readonly codeEditorService: CodeEditorService;
 }
 
 /** Adapts a Part to an IView of a SplitView. Hidden parts can hold no space (min and max 0). */
@@ -156,7 +164,13 @@ export class WorkbenchLayout extends Disposable {
 		this._hSplit.addView(new SplitLayoutView(editorColumnContainer, this._vSplit, 300), 0);
 
 		const editorContainer = $('div');
-		this.editor = this._register(new EditorPart());
+		this.editor = this._register(new EditorPart({
+			options: _services.editorOptions,
+			configuration: _services.configuration,
+			contextKeyService: _services.contextKeyService,
+			codeEditorService: _services.codeEditorService,
+			commandService: _services.commandService
+		}));
 		this.editor.create(editorContainer);
 		this._vSplit.addView(new PartView(editorContainer, this.editor, Orientation.VERTICAL), 0);
 

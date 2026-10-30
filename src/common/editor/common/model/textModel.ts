@@ -138,6 +138,20 @@ export class TextModel extends Disposable {
 		this._savedVersionId = versionId;
 	}
 
+	/**
+	 * Reset the buffer to `text` and drop the whole edit history (09's revert). The version
+	 * advances (listeners re-read) and the reset state counts as saved.
+	 */
+	revertTo(text: string): void {
+		this._assertNotDisposed();
+		const fullRange = this.getFullModelRange();
+		if (this.getValue() !== text) {
+			this.applyEdits([{ range: fullRange, text }]);
+		}
+		this._editStack.clear();
+		this._savedVersionId = this._alternativeVersionId;
+	}
+
 	private _increaseVersionId(): void {
 		this._versionId = this._versionId + 1;
 		this._alternativeVersionId = this._versionId;
@@ -310,14 +324,16 @@ export class TextModel extends Disposable {
 			return null;
 		}
 
+		// version bookkeeping BEFORE the event: listeners (09's dirty tracking) read isModified
+		// while the content-change event is being delivered
+		this._versionId += 1;
+		this._alternativeVersionId -= element.pushes;
+
 		this._isUndoing = true;
 		try {
 			this._applyStackElement(element, false);
 		} finally {
 			this._isUndoing = false;
-			// undo walks back through history: version advances, the alternative one steps back
-			this._versionId += 1;
-			this._alternativeVersionId -= 1;
 		}
 		return element.beforeCursorState;
 	}
@@ -330,13 +346,14 @@ export class TextModel extends Disposable {
 			return null;
 		}
 
+		this._versionId += 1;
+		this._alternativeVersionId += element.pushes;
+
 		this._isRedoing = true;
 		try {
 			this._applyStackElement(element, true);
 		} finally {
 			this._isRedoing = false;
-			this._versionId += 1;
-			this._alternativeVersionId += 1;
 		}
 		return element.afterCursorState;
 	}

@@ -60,6 +60,10 @@ export class Workbench extends Disposable {
 			case 'togglePanel':
 				void this._commandService.executeCommand(TOGGLE_PANEL_ID);
 				break;
+			case 'openSampleFile':
+				// registered by 09's editor actions; a menu item without a command is a no-op
+				void this._commandService.executeCommand('mini.openSampleFile');
+				break;
 		}
 	}
 

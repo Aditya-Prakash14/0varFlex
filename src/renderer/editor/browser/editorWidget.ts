@@ -604,6 +604,9 @@ function addWindowListener(type: 'blur' | 'focus', handler: () => void): IDispos
 }
 
 // ---- commands & keybindings (real IDs, mac defaults)
+//
+// 09: the widget is no longer a singleton — the commands resolve the ACTIVE editor widget
+// through the editor service (real commands do the same via the focused editor group).
 
 interface IEditorCommandBinding {
 	readonly primary?: number;
@@ -611,9 +614,9 @@ interface IEditorCommandBinding {
 	readonly mac?: number;
 }
 
-export function registerEditorCommands(widget: EditorWidget): IDisposable {
+export function registerEditorCommands(getActiveWidget: () => EditorWidget | null): IDisposable {
 	const disposables: IDisposable[] = [];
-	const when = widget.textFocus;
+	const when = new RawContextKey<boolean>('editorTextFocus', false);
 
 	const register = (
 		id: string,
@@ -622,7 +625,7 @@ export function registerEditorCommands(widget: EditorWidget): IDisposable {
 		run: () => void,
 		binding?: IEditorCommandBinding
 	): void => {
-		disposables.push(CommandsRegistry.registerCommand(id, () => run()));
+		disposables.push(CommandsRegistry.registerCommand(id, () => getActiveWidget() && run()));
 		disposables.push(CommandMetadata.register({ id, title, category }));
 		if (binding && (binding.primary !== undefined || binding.mac !== undefined)) {
 			disposables.push(KeybindingsRegistry.registerKeybindingRule({
@@ -635,7 +638,7 @@ export function registerEditorCommands(widget: EditorWidget): IDisposable {
 	};
 
 	const cursor = (id: string, title: string, moveType: MoveType, isSelecting: boolean, binding?: IEditorCommandBinding): void => {
-		register(id, title, 'Cursor', () => widget.moveCursor(moveType, isSelecting), binding);
+		register(id, title, 'Cursor', () => getActiveWidget()!.moveCursor(moveType, isSelecting), binding);
 	};
 
 	cursor('cursorLeft', 'Cursor Left', MoveType.Left, false, { primary: KeyCode.LeftArrow });
@@ -675,14 +678,14 @@ export function registerEditorCommands(widget: EditorWidget): IDisposable {
 	cursor('cursorPageDown', 'Scroll Page Down', MoveType.PageDown, false, { primary: KeyCode.PageDown });
 	cursor('cursorPageDownSelect', 'Select Page Down', MoveType.PageDown, true, { primary: KeyMod.Shift | KeyCode.PageDown });
 
-	register('deleteLeft', 'Delete Left', 'Editing', () => widget.deleteLeft(), { primary: KeyCode.Backspace });
-	register('deleteRight', 'Delete Right', 'Editing', () => widget.deleteRight(), { primary: KeyCode.Delete });
-	register('undo', 'Undo', 'Editing', () => widget.undo(), { primary: KeyMod.CtrlCmd | KeyCode.KeyZ, secondary: KeyMod.WinCtrl | KeyCode.KeyZ });
-	register('redo', 'Redo', 'Editing', () => widget.redo(), { primary: KeyMod.CtrlCmd | KeyMod.Shift | KeyCode.KeyZ, secondary: KeyMod.WinCtrl | KeyMod.Shift | KeyCode.KeyZ });
-	register('tab', 'Insert Tab', 'Editing', () => widget.type('\t'), { primary: KeyCode.Tab });
+	register('deleteLeft', 'Delete Left', 'Editing', () => getActiveWidget()!.deleteLeft(), { primary: KeyCode.Backspace });
+	register('deleteRight', 'Delete Right', 'Editing', () => getActiveWidget()!.deleteRight(), { primary: KeyCode.Delete });
+	register('undo', 'Undo', 'Editing', () => getActiveWidget()!.undo(), { primary: KeyMod.CtrlCmd | KeyCode.KeyZ, secondary: KeyMod.WinCtrl | KeyCode.KeyZ });
+	register('redo', 'Redo', 'Editing', () => getActiveWidget()!.redo(), { primary: KeyMod.CtrlCmd | KeyMod.Shift | KeyCode.KeyZ, secondary: KeyMod.WinCtrl | KeyMod.Shift | KeyCode.KeyZ });
+	register('tab', 'Insert Tab', 'Editing', () => getActiveWidget()!.type('\t'), { primary: KeyCode.Tab });
 
 	// programmatic typing path (the textarea routes here); not bound to a key by design
-	disposables.push(CommandsRegistry.registerCommand('type', (_accessor, text: string) => widget.type(String(text ?? ''))));
+	disposables.push(CommandsRegistry.registerCommand('type', (_accessor, text: string) => getActiveWidget()?.type(String(text ?? ''))));
 
 	return toDisposable(() => disposables.forEach(d => d.dispose()));
 }

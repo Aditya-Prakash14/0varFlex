@@ -34,11 +34,36 @@ class WindowChannelService implements IWindowChannel {
 	/** menu commands are fired by the Electron menu (see sendMenuCommand) */
 	private readonly _onMenuCommand = new Emitter<WindowMenuCommand>();
 	private readonly _onDidChangeFullScreen = new Emitter<boolean>();
+	private readonly _onWillCloseWindow = new Emitter<void>();
 
-	constructor(private readonly _window: BrowserWindow, store: DisposableStore) {
+	/** set once the renderer allowed the close (or the watchdog did) */
+	private _closeAllowed = false;
+	private _closeWatchdog: ReturnType<typeof setTimeout> | undefined;
+
+	constructor(private readonly _window: BrowserWindow, store: DisposableStore, private readonly _openedFile: string | null) {
 		store.add(toDisposable(() => this._onDidChangeFocus.dispose()));
 		store.add(toDisposable(() => this._onMenuCommand.dispose()));
 		store.add(toDisposable(() => this._onDidChangeFullScreen.dispose()));
+		store.add(toDisposable(() => this._onWillCloseWindow.dispose()));
+		store.add(toDisposable(() => {
+			if (this._closeWatchdog !== undefined) {
+				clearTimeout(this._closeWatchdog);
+			}
+		}));
+
+		// ---- the close veto: intercept `close`, ask the renderer, destroy only on a yes.
+		// The watchdog (2s) covers a hung/crashed renderer — same idea as the real main
+		// process's hung-renderer handling: never trap the user in an unclosable window.
+		this._window.on('close', (event: Electron.Event) => {
+			if (this._closeAllowed) {
+				return;
+			}
+			event.preventDefault();
+			this._onWillCloseWindow.fire();
+			if (this._closeWatchdog === undefined) {
+				this._closeWatchdog = setTimeout(() => void this.resolveClose(true), 2000);
+			}
+		});
 
 		const onFocus = (): void => this._onDidChangeFocus.fire(true);
 		const onBlur = (): void => this._onDidChangeFocus.fire(false);
@@ -93,6 +118,31 @@ class WindowChannelService implements IWindowChannel {
 
 	get onDidChangeFullScreen(): Event<boolean> {
 		return this._onDidChangeFullScreen.event;
+	}
+
+	get onWillCloseWindow(): Event<void> {
+		return this._onWillCloseWindow.event;
+	}
+
+	async resolveClose(allow: boolean): Promise<void> {
+		if (this._closeWatchdog !== undefined) {
+			clearTimeout(this._closeWatchdog);
+			this._closeWatchdog = undefined;
+		}
+		if (!allow) {
+			// the renderer cancelled (a dialog): the window stays; a later close asks again
+			return;
+		}
+		this._closeAllowed = true;
+		this._window.close();
+	}
+
+	async requestCloseWindow(): Promise<void> {
+		this._window.close();
+	}
+
+	async getOpenedFile(): Promise<string | null> {
+		return this._openedFile;
 	}
 
 	fireMenuCommand(command: WindowMenuCommand): void {
@@ -183,10 +233,9 @@ export function sendMenuCommand(command: WindowMenuCommand): void {
 	windowServices.get(window.id)?.fireMenuCommand(command);
 }
 
-export function registerChannels(window: BrowserWindow, server: ChannelServer<IWindowContext>, store: DisposableStore, storage: StorageMainService): void {
-	server.registerChannel('log', ProxyChannel.fromService<IWindowContext>(new LogChannel(), store));
+export function registerChannels(window: BrowserWindow, server: ChannelServer<IWindowContext>, store: DisposableStore, storage: StorageMainService, openedFile: string | null): void {	server.registerChannel('log', ProxyChannel.fromService<IWindowContext>(new LogChannel(), store));
 	server.registerChannel('fileIO', new FileIOChannel());
-	server.registerChannel('window', ProxyChannel.fromService<IWindowContext>(new WindowChannelService(window, store), store));
+	server.registerChannel('window', ProxyChannel.fromService<IWindowContext>(new WindowChannelService(window, store, openedFile), store));
 	// storage is app-level (not per window), but it rides the window's channel server
 	server.registerChannel('storage', storage);
 }

@@ -229,12 +229,6 @@ body {
 	background: var(--mini-background);
 }
 
-.editor-content {
-	position: absolute;
-	inset: 0;
-	overflow: hidden;
-}
-
 .editor-watermark {
 	position: absolute;
 	inset: 0;
@@ -242,7 +236,6 @@ body {
 	flex-direction: column;
 	align-items: center;
 	justify-content: center;
-	pointer-events: none;
 }
 
 .watermark-title {
@@ -437,6 +430,214 @@ body {
 	background: var(--mini-background);
 	border-bottom: 1px solid #aeafad;
 	z-index: 9;
+}
+
+/* ---- editor groups and tabs (exercise 09) ---- */
+
+.editor-part-content {
+	position: absolute;
+	inset: 0;
+	overflow: hidden;
+}
+
+.editor-group {
+	position: absolute;
+	overflow: hidden;
+	background: var(--mini-background);
+}
+
+.editor-group-title {
+	position: absolute;
+	top: 0;
+	left: 0;
+	right: 0;
+	background: #252526;
+}
+
+.editor-group-content {
+	position: absolute;
+	left: 0;
+	right: 0;
+	bottom: 0;
+	top: 35px;
+	overflow: hidden;
+}
+
+.editor-pane {
+	position: absolute;
+	top: 0;
+	left: 0;
+	overflow: hidden;
+}
+
+/* the tab strip scrolls without a visible scrollbar (real shows scroll arrows — delta) */
+.tabs-container {
+	display: flex;
+	height: 100%;
+	overflow-x: auto;
+	overflow-y: hidden;
+	scrollbar-width: none;
+}
+
+.tabs-container::-webkit-scrollbar {
+	display: none;
+}
+
+.tab {
+	display: flex;
+	align-items: center;
+	flex: 0 0 auto;
+	min-width: 120px;
+	max-width: 240px;
+	height: 100%;
+	padding: 0 4px 0 10px;
+	background: #2d2d2d;
+	border-right: 1px solid #252526;
+	color: #969696;
+	font-size: 13px;
+	cursor: pointer;
+}
+
+.tab.active {
+	background: var(--mini-background);
+	color: var(--mini-foreground);
+}
+
+/* an inactive group dims its active tab (port of tab-unfocusedActive colors) */
+.editor-group:not(.active-group) .tab.active {
+	background: #232323;
+	color: #969696;
+}
+
+.tab-label {
+	flex: 1;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.tab-actions {
+	display: flex;
+	align-items: center;
+	margin-left: 6px;
+}
+
+.tab-action-close {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 22px;
+	height: 22px;
+	border-radius: 4px;
+	opacity: 0;
+	transition: opacity 0.1s ease-out;
+}
+
+/* ported visibility rules: active/hover/dirty show the action; the active GROUP brightens it */
+.tab.active > .tab-actions > .tab-action-close,
+.tab:hover > .tab-actions > .tab-action-close,
+.tab.dirty > .tab-actions > .tab-action-close {
+	opacity: 0.5;
+}
+
+.editor-group.active-group .tab.active > .tab-actions > .tab-action-close,
+.editor-group.active-group .tab:hover > .tab-actions > .tab-action-close,
+.editor-group.active-group .tab.dirty > .tab-actions > .tab-action-close {
+	opacity: 1;
+}
+
+.tab-action-close:hover {
+	background: rgba(255, 255, 255, 0.1);
+}
+
+/* the dirty dot ⇄ ✕ swap is pure CSS: the node never changes */
+.tab-action-close::before {
+	content: '×';
+	font-size: 12px;
+	line-height: 1;
+}
+
+.tab.dirty:not(:hover) > .tab-actions > .tab-action-close::before {
+	content: '';
+	width: 8px;
+	height: 8px;
+	border-radius: 50%;
+	background: currentColor;
+}
+
+.watermark-entry:not(.disabled) {
+	cursor: pointer;
+}
+
+.watermark-entry:not(.disabled):hover {
+	color: var(--mini-foreground);
+}
+
+.watermark-entry.disabled {
+	opacity: 0.5;
+}
+
+/* ---- dialogs (exercise 09) ---- */
+
+.confirm-dialog-backdrop {
+	position: fixed;
+	inset: 0;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	background: rgba(0, 0, 0, 0.35);
+	z-index: 100;
+}
+
+.confirm-dialog {
+	width: 420px;
+	padding: 18px 20px 14px;
+	background: #252526;
+	border: 1px solid #454545;
+	border-radius: 4px;
+	box-shadow: 0 8px 30px rgba(0, 0, 0, 0.5);
+	color: var(--mini-foreground);
+	font-size: 13px;
+}
+
+.confirm-dialog-message {
+	margin-bottom: 4px;
+}
+
+.confirm-dialog-detail {
+	color: #969696;
+	margin-bottom: 10px;
+}
+
+.confirm-dialog-buttons {
+	display: flex;
+	justify-content: flex-end;
+	gap: 8px;
+	margin-top: 16px;
+}
+
+.confirm-dialog-button {
+	min-width: 84px;
+	padding: 4px 12px;
+	background: #3a3d41;
+	border: 1px solid transparent;
+	border-radius: 2px;
+	color: #ffffff;
+	font: inherit;
+	cursor: pointer;
+}
+
+.confirm-dialog-button.primary {
+	background: var(--mini-accent);
+}
+
+.confirm-dialog-button:hover {
+	filter: brightness(1.15);
+}
+
+.confirm-dialog-button:focus {
+	outline: 1px solid #ffffff;
+	outline-offset: -2px;
 }
 
 /* ---- panel ---- */

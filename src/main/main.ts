@@ -1,4 +1,5 @@
 import { app, BrowserWindow, ipcMain } from 'electron';
+import { existsSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { MainProcessIpc } from './parts/ipc/ipcMain.js';
@@ -10,6 +11,25 @@ import { installMenu } from './menu.js';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 let storage: StorageMainService;
+
+/** `mini-vscode somefile.txt` — the CLI seed (14 grows this into a real argv parser) */
+function fileFromArgv(argv: string[]): string | null {
+	for (const arg of argv.slice(1)) {
+		if (arg.startsWith('-') || arg === '.') {
+			continue;
+		}
+		try {
+			if (existsSync(arg) && statSync(arg).isFile()) {
+				return path.resolve(arg);
+			}
+		} catch {
+			// not a path — keep looking
+		}
+	}
+	return null;
+}
+
+const openedFile = fileFromArgv(process.argv);
 
 function createWindow(): void {
 	const win = new BrowserWindow({
@@ -43,7 +63,7 @@ ipcMain.handle('mini:ping', (_event, payload: string) => ({
 const ipc = new MainProcessIpc((server, store, sender) => {
 	const window = BrowserWindow.fromWebContents(sender);
 	if (window) {
-		registerChannels(window, server, store, storage);
+		registerChannels(window, server, store, storage, openedFile);
 	}
 });
 

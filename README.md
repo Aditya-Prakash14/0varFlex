@@ -13,6 +13,10 @@ editor view).
   `IViewModel` + `WrappedLine` model) is the first big port to do.
 - Native scrollbars instead of the rendered scrollbar widget (`viewParts/editorScrollbar`), no
   smooth scrolling physics, no minimap, no folding, no multi-cursor.
+- Editor tabs: no preview/italic tabs, no pinned tabs, no tab drag-reorder or drag between
+  groups, no breadcrumbs; the editor groups live in a plain split view (no docking grid).
+- No hot-exit/backups/autoSave and no untitled editors; saving is one write through the FileIO
+  channel (see `textEditorInput.ts`).
 - The tokenizer is a single scanner per line (`// shortcut:` in `src/renderer/editor/browser/tokenizer.ts`);
   TextMate/Monarch grammars are the upgrade path.
 - Line buffer is a line array (not the piece tree); see `textBuffer.ts` notes.

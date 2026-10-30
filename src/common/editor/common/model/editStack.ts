@@ -22,6 +22,12 @@ export interface IEditStackElement {
 	readonly beforeCursorState: CursorState | null;
 	changes: TextChange[];
 	afterCursorState: CursorState | null;
+	/**
+	 * how many separate pushes merged into this element. The alternative version steps by this
+	 * count on undo/redo — one step per push, so undoing a merged run lands EXACTLY on the
+	 * version the run started from (isModified turns clean again).
+	 */
+	pushes: number;
 }
 
 export class EditStack {
@@ -52,13 +58,14 @@ export class EditStack {
 
 		const canMerge = !!element && !this._closed && (now - element.storedAt) < CONTINUATION_TIME;
 		if (!canMerge) {
-			element = { changes: [], beforeCursorState, afterCursorState: null, storedAt: now };
+			element = { changes: [], beforeCursorState, afterCursorState: null, storedAt: now, pushes: 0 };
 			this._undoStack.push(element);
 		}
 
 		element.changes.push(...changes);
 		element.afterCursorState = afterCursorState;
 		element.storedAt = now;
+		element.pushes += 1;
 
 		// subsequent edits may merge into this element
 		this._closed = false;

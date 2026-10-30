@@ -1,4 +1,4 @@
-// src/renderer/platform/instantiation/common/instantiationService.ts
+// src/common/platform/instantiation/common/instantiationService.ts
 // — ported from vs/platform/instantiation/common/instantiationService.ts
 //
 // shortcut: sync-only DI. No delayed/async instantiation, no tracing/profiling hooks.

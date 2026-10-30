@@ -1,4 +1,4 @@
-// src/renderer/base/common/lifecycle.ts — ported from vs/base/common/lifecycle.ts.
+// src/common/base/common/lifecycle.ts — ported from vs/base/common/lifecycle.ts.
 // Skipped upstream: leak tracking (DisposableTracker, markAsDisposed), parent-of-disposable bookkeeping.
 
 /**

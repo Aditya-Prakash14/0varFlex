@@ -1,4 +1,4 @@
-// src/renderer/base/common/uri.ts — ported from vs/base/common/uri.ts (which is generated from the
+// src/common/base/common/uri.ts — ported from vs/base/common/uri.ts (which is generated from the
 // vscode-uri package). File scheme only for now; http/untitled/... arrive when needed.
 // Skipped upstream: revive/toJSON/marshalling, the caching URI subclass, isUri/from.
 

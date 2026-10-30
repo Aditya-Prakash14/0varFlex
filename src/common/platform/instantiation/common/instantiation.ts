@@ -1,4 +1,4 @@
-// src/renderer/platform/instantiation/common/instantiation.ts
+// src/common/platform/instantiation/common/instantiation.ts
 // — ported verbatim-in-spirit from vs/platform/instantiation/common/instantiation.ts
 
 import { DisposableStore } from '../../../base/common/lifecycle.js';

@@ -1,4 +1,4 @@
-// src/renderer/platform/log/common/log.ts — the first real service.
+// src/common/platform/log/common/log.ts — the first real service.
 // Simplified ILogService: info/warn/error/trace + onDidLog.
 // Skipped upstream: log levels configuration, file outputs, ILogger/ILoggerService split.
 

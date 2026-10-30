@@ -1,4 +1,4 @@
-// src/renderer/platform/instantiation/common/serviceCollection.ts
+// src/common/platform/instantiation/common/serviceCollection.ts
 // — ported from vs/platform/instantiation/common/serviceCollection.ts
 
 import type { ServiceIdentifier } from './instantiation.js';

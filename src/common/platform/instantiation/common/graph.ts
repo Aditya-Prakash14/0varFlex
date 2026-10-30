@@ -1,4 +1,4 @@
-// src/renderer/platform/instantiation/common/graph.ts
+// src/common/platform/instantiation/common/graph.ts
 // — ported from vs/platform/instantiation/common/graph.ts
 
 export class Node<T> {

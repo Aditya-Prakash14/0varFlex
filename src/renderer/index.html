@@ -14,10 +14,22 @@
 			place-items: center;
 		}
 		#app { text-align: center; }
+		#ipc-test {
+			margin-top: 12px;
+			color: inherit;
+			background: #3c3c3c;
+			font: inherit;
+			border: 1px solid #555555;
+			border-radius: 3px;
+			padding: 4px 10px;
+		}
 	</style>
 </head>
 <body>
-	<div id="app">loading…</div>
+	<div id="app">
+		<div id="status">loading…</div>
+		<button id="ipc-test">run ipc dev checks</button>
+	</div>
 	<script type="module" src="./renderer.js"></script>
 </body>
 </html>

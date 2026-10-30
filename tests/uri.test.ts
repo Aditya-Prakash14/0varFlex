@@ -4,7 +4,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import { URI } from '../src/renderer/base/common/uri.js';
+import { URI } from '../src/common/base/common/uri.js';
 
 test('parse splits scheme/authority/path and decodes percent-encoding', () => {
 	const uri = URI.parse('file:///tmp/a%20b.ts');

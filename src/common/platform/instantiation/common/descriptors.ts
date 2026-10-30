@@ -1,4 +1,4 @@
-// src/renderer/platform/instantiation/common/descriptors.ts
+// src/common/platform/instantiation/common/descriptors.ts
 // — ported from vs/platform/instantiation/common/descriptors.ts
 //
 // shortcut: sync-only DI. supportsDelayedInstantiation is kept as a marker (and rejected by

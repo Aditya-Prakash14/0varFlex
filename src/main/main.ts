@@ -1,6 +1,8 @@
 import { app, BrowserWindow, ipcMain } from 'electron';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { MainProcessIpc } from './parts/ipc/ipcMain.js';
+import { registerChannels } from './parts/ipc/channels.js';
 
 // In modern JavaScript modules there is no __dirname; these two lines recreate it.
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -22,14 +24,24 @@ function createWindow(): void {
 	void win.loadFile(path.join(__dirname, 'index.html'));
 }
 
-// The one IPC endpoint so far: the renderer asks "mini:ping", the main process answers.
+// The one IPC endpoint of exercise 00: the renderer asks "mini:ping", the main process answers.
 ipcMain.handle('mini:ping', (_event, payload: string) => ({
 	pong: payload,
 	from: 'main',
 }));
 
+// Exercise 02: the channel transport. One ChannelServer per window, created lazily with the
+// renderer's first message.
+const ipc = new MainProcessIpc((server, store, sender) => {
+	const window = BrowserWindow.fromWebContents(sender);
+	if (window) {
+		registerChannels(window, server, store);
+	}
+});
+
 void app.whenReady().then(createWindow);
 
 app.on('window-all-closed', () => {
+	ipc.dispose();
 	app.quit(); // close the window → quit the whole app (incl. on macOS)
 });

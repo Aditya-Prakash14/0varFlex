@@ -1,4 +1,4 @@
-// src/renderer/base/common/event.ts — a small core of vs/base/common/event.ts:
+// src/common/base/common/event.ts — a small core of vs/base/common/event.ts:
 // Emitter, Event.once/map/filter/None. Skipped upstream: debounce/throttle, node emitters,
 // leak tracking, delivery queues, snapshot-sharing for derived events.
 

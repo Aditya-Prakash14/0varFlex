@@ -3,8 +3,8 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import { Emitter, Event } from '../src/renderer/base/common/event.js';
-import { Disposable, DisposableStore, dispose, IDisposable, toDisposable } from '../src/renderer/base/common/lifecycle.js';
+import { Emitter, Event } from '../src/common/base/common/event.js';
+import { Disposable, DisposableStore, dispose, IDisposable, toDisposable } from '../src/common/base/common/lifecycle.js';
 
 test('DisposableStore disposes its contents in insertion order, then clears', () => {
 	const store = new DisposableStore();

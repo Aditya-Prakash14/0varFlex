@@ -3,10 +3,10 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import { _util, createDecorator } from '../src/renderer/platform/instantiation/common/instantiation.js';
-import { InstantiationService } from '../src/renderer/platform/instantiation/common/instantiationService.js';
-import { ServiceCollection } from '../src/renderer/platform/instantiation/common/serviceCollection.js';
-import { SyncDescriptor } from '../src/renderer/platform/instantiation/common/descriptors.js';
+import { _util, createDecorator } from '../src/common/platform/instantiation/common/instantiation.js';
+import { InstantiationService } from '../src/common/platform/instantiation/common/instantiationService.js';
+import { ServiceCollection } from '../src/common/platform/instantiation/common/serviceCollection.js';
+import { SyncDescriptor } from '../src/common/platform/instantiation/common/descriptors.js';
 
 test('decorated dependencies resolve; dependencies are created before dependents', () => {
 	interface IOrderB { readonly _serviceBrand: undefined; }

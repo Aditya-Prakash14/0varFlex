@@ -34,6 +34,9 @@ import { Workbench } from './workbench/browser/workbench.js';
 import { StatusbarAlignment } from './workbench/browser/parts/statusbar/statusbarPart.js';
 import { registerEditorActions } from './workbench/browser/parts/editor/editorActions.js';
 import { registerProblemsView } from './workbench/contrib/problems/browser/problemsView.js';
+import { TerminalService } from './workbench/contrib/terminal/browser/terminalService.js';
+import { TerminalPanel } from './workbench/contrib/terminal/browser/terminalPanel.js';
+import { registerTerminalActions } from './workbench/contrib/terminal/browser/terminalActions.js';
 import { TextEditorPane } from './workbench/browser/parts/editor/editorPanes.js';
 import { registerConfigurationActions } from './workbench/contrib/configuration/browser/configurationActions.js';
 import { registerDefaultConfigurations } from './workbench/contrib/configuration/browser/defaultSettings.js';
@@ -239,14 +242,19 @@ async function main(): Promise<void> {
 
 	CommandsRegistry.registerCommand('mini.probe.chordA', () => logService.info('chord probe A fired'));
 	CommandsRegistry.registerCommand('mini.probe.chordB', () => logService.info('chord probe B fired'));
+	// 13: the editor chords carry `editorTextFocus` (real editor bindings do) — the terminal's
+	// cmd+k clear can only win when the chords are out of context. Found by the chord matrix.
+	const editorFocusKey = new RawContextKey<boolean>('editorTextFocus', false);
 	KeybindingsRegistry.registerKeybindingRule({
 		id: 'mini.probe.chordA',
 		weight: KeybindingWeight.BuiltinExtension,
+		when: editorFocusKey,
 		primary: KeyChord(KeyMod.CtrlCmd | KeyCode.KeyK, KeyMod.CtrlCmd | KeyCode.KeyA)
 	});
 	KeybindingsRegistry.registerKeybindingRule({
 		id: 'mini.probe.chordB',
 		weight: KeybindingWeight.BuiltinExtension,
+		when: editorFocusKey,
 		primary: KeyChord(KeyMod.CtrlCmd | KeyCode.KeyK, KeyMod.CtrlCmd | KeyCode.KeyB)
 	});
 	keybindingService.rebuild();
@@ -475,6 +483,20 @@ async function main(): Promise<void> {
 	}
 	updateWorkspaceUi();
 
+	// ---- the terminal (exercise 13): service + panel UI + actions. Nothing spawns until the
+	// panel first becomes visible (the ports open lazily on the first createProcess).
+	const terminalService = new TerminalService({
+		windowChannel,
+		configuration: configurationService,
+		contextKeyService,
+		logService,
+		keybindingService,
+		getCwd: () => workspaceContext.folder?.uri
+	});
+	const terminalPanel = new TerminalPanel(workbench.layout.panel, terminalService, configurationService, visible => workbench.layout.setPanelVisible(visible));
+	registerTerminalActions(terminalPanel, contextKeyService);
+	keybindingService.rebuild();
+
 	// ---- the extension system (exercise 11): scan → contributions → the host process
 	const languageService = new LanguageService(logService);
 	// 12: the provider registry resolves resource → languageId through 11's LanguageService
@@ -543,8 +565,15 @@ async function main(): Promise<void> {
 	CommandMetadata.register({ id: 'workbench.action.reloadWindow', title: 'Developer: Reload Window', category: 'Developer' });
 	keybindingService.rebuild();
 
-	// `onStartupFinished`: after the first render pass (a rAF), like the reference's startup event
-	await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
+	// `onStartupFinished`: after the first render pass, like the reference's startup event.
+	// rAF NEVER fires in an occluded window (13's reload lesson): race it against a timer.
+	await new Promise<void>(resolve => {
+		const timer = window.setTimeout(resolve, 50);
+		requestAnimationFrame(() => {
+			window.clearTimeout(timer);
+			resolve();
+		});
+	});
 	void extensionService.activateStartupFinished();
 
 	// ---- debug readout: proves settings live reload until 08/10 replace it with real consumers
@@ -714,6 +743,75 @@ async function main(): Promise<void> {
 				column: marker.range.startColumn
 			})),
 			readHost: (method: string, args: unknown[]) => hostManager.callHostService('ExtHostLanguageFeatures', method, args)
+		},
+		terminal: {
+			isPanelVisible: () => workbench.layout.panel.visible,
+			createTerminal: () => terminalPanel.newTerminal().then(instance => instance.id ?? null),
+			kill: (id: number) => {
+				const instance = terminalService.getInstance(id);
+				return instance ? terminalPanel.kill(instance) : Promise.resolve();
+			},
+			setActive: (id: number) => {
+				const instance = terminalService.getInstance(id);
+				if (instance) {
+					terminalService.setActive(instance);
+					instance.focus();
+				}
+			},
+			getActiveId: () => terminalService.activeInstance?.id ?? null,
+			getInstances: () => terminalService.instances.map(instance => ({
+				id: instance.id ?? null,
+				title: instance.title,
+				exited: instance.isExited,
+				focused: instance.hasFocus,
+				cols: instance.xterm.cols,
+				rows: instance.xterm.rows,
+				bufferType: instance.xterm.buffer.active.type,
+				fontSize: instance.xterm.options.fontSize,
+				scrollback: instance.xterm.options.scrollback
+			})),
+			input: (id: number, text: string) => terminalService.input(id, text),
+			/** the acceptance reads the buffer instead of scraping the DOM */
+			readBuffer: (id: number) => {
+				const instance = terminalService.getInstance(id);
+				if (!instance) {
+					return null;
+				}
+				const buffer = instance.xterm.buffer.active;
+				const lines: string[] = [];
+				for (let i = 0; i < buffer.length; i++) {
+					lines.push(buffer.getLine(i)?.translateToString(true) ?? '');
+				}
+				return lines.join('\n');
+			},
+			/** non-default foreground cells (ANSI color proof without the DOM renderer) */
+			getColoredCells: (id: number) => {
+				const instance = terminalService.getInstance(id);
+				if (!instance) {
+					return null;
+				}
+				const buffer = instance.xterm.buffer.active;
+				const runs: { text: string; fg: number }[] = [];
+				for (let y = 0; y < buffer.length; y++) {
+					const line = buffer.getLine(y);
+					if (!line) {
+						continue;
+					}
+					for (let x = 0; x < line.length; x++) {
+						const cell = line.getCell(x);
+						if (!cell || cell.isFgDefault() || cell.getChars() === '') {
+							continue;
+						}
+						runs.push({ text: cell.getChars(), fg: cell.getFgColor() });
+						if (runs.length > 300) {
+							return runs;
+						}
+					}
+				}
+				return runs;
+			},
+			focus: () => terminalPanel.focusActive(),
+			clear: () => terminalPanel.clearActive()
 		},
 		extensions: {
 			getScanSummary: () => ({

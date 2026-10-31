@@ -10,6 +10,7 @@ import { FileService } from '../../../common/platform/files/common/fileService.j
 import { createFileServiceWire, IFileServiceWire } from '../../../common/platform/files/common/fileIpc.js';
 import { IWindowChannel, IWindowInfo, WindowMenuCommand } from '../../../common/platform/window/common/window.js';
 import { ExtensionHostLauncher, scanExtensionsMain } from '../../extensionHost.js';
+import { PtyHostStarter } from '../../terminal/ptyHostStarter.js';
 import type { ILogService } from '../../../common/platform/log/common/log.js';
 import type { IExtensionScanResult } from '../../../common/platform/extensions/common/extensionScanner.js';
 import { StorageMainService } from '../../../common/platform/storage/common/storageIpc.js';
@@ -87,6 +88,8 @@ class WindowChannelService implements IWindowChannel {
 		// the extension host belongs to this window: killing it on navigation/close is what keeps
 		// five reloads from accumulating utility processes
 		store.add(toDisposable(() => this._extHostLauncher.kill()));
+		// 13: the pty host has the same lifecycle — and killing it kills every pty with it
+		store.add(toDisposable(() => this._ptyHostStarter.kill()));
 
 		// this window's service is the routing target for menu commands
 		windowServices.set(this._window.id, this);
@@ -127,6 +130,10 @@ class WindowChannelService implements IWindowChannel {
 
 	private readonly _extHostLauncher: ExtensionHostLauncher =
 		new ExtensionHostLauncher(() => this._window.webContents);
+
+	/** 13: the pty host (one utility process per window, port-transferred like the ext host) */
+	private readonly _ptyHostStarter: PtyHostStarter =
+		new PtyHostStarter(() => this._window.webContents);
 
 	/** 10: the Open Folder picker (ported from IFileDialogService.showOpenDialog) */
 	async showOpenFolderDialog(options?: { title?: string; defaultPath?: string }): Promise<string | null> {
@@ -181,6 +188,14 @@ class WindowChannelService implements IWindowChannel {
 
 	get onDidExtensionHostExit(): Event<number | undefined> {
 		return this._extHostLauncher.onDidExit;
+	}
+
+	async startPtyHost(): Promise<void> {
+		this._ptyHostStarter.start();
+	}
+
+	get onDidPtyHostExit(): Event<number | undefined> {
+		return this._ptyHostStarter.onDidExit;
 	}
 
 	async reloadWindow(): Promise<void> {

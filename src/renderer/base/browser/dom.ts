@@ -31,10 +31,27 @@ export function getWindow(element: HTMLElement | null | undefined): Window {
 
 /**
  * Schedule a callback for the next animation frame. The returned disposable cancels it.
+ * rAF NEVER fires in occluded windows (13's lesson — the size observer and every consumer
+ * already rely on this scheduler): a 50ms timer backstops it, exactly like the view's render
+ * scheduling in 08.
  */
 export function scheduleAtNextAnimationFrame(targetWindow: Window, callback: () => void): IDisposable {
-	const handle = targetWindow.requestAnimationFrame(callback);
-	return toDisposable(() => targetWindow.cancelAnimationFrame(handle));
+	let done = false;
+	const run = (): void => {
+		if (done) {
+			return;
+		}
+		done = true;
+		targetWindow.clearTimeout(timer);
+		callback();
+	};
+	const handle = targetWindow.requestAnimationFrame(run);
+	const timer = targetWindow.setTimeout(run, 50);
+	return toDisposable(() => {
+		done = true;
+		targetWindow.cancelAnimationFrame(handle);
+		targetWindow.clearTimeout(timer);
+	});
 }
 
 /**

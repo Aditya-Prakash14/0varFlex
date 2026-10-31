@@ -3,7 +3,56 @@
 A miniature VS Code built from scratch (Electron + TypeScript), porting structure and behavior
 from a local VS Code reference tree, exercise by exercise. See `git log` for the progression
 (instantiation → IPC → shell → commands → keybindings → configuration/storage → text model →
-editor view → files/workspace → extensions → language features).
+editor view → files/workspace → extensions → language features → terminal).
+
+## The terminal (13): pty host + flow control + xterm
+
+Real architecture, real constants:
+
+- **A separate pty host process** (`src/ptyHost/`, forked by `src/main/terminal/ptyHostStarter.ts`)
+  owns the `node-pty` sessions. The MessagePort dance is 11's, done twice (main keeps neither
+  end); the renderer talks to `IPtyHostService` through 02's proxy channels — `$createProcess`,
+  `$start`, `$input`, `$ackData`, `$resize`, `$shutdown` and the `onProcessData/Ready/Exit`
+  events, the ported channel shape.
+- **Flow control is the real thing**: `FlowControlConstants` ported verbatim (pause above
+  100 000 unacknowledged chars, resume below 5 000, ack every 5 000). The renderer acks from the
+  `xterm.write` CALLBACK (parsed, not received — acking on receive makes the mechanism
+  decorative). A `yes` flood measures ~600 pause/resume pairs per 5s with bounded RSS.
+- **Batching** is `TerminalDataBufferer`'s 5ms window (pty → buffer → flush), the layer that
+  keeps the IPC from drowning in one message per pty read.
+- The **start order** is the ported one: open xterm → fit → `$createProcess(cols, rows)` →
+  `$start`, then an explicit resize so the pty matches the fitted grid (the classic
+  zsh-first-prompt fix). Fitting is guarded to visible, sized terminals (#1 multi-terminal bug).
+- **`attachCustomKeyEventHandler`** implements the ported rule: the workbench keybindings get
+  first refusal on every keypress; only otherwise does xterm consume it. That is what makes
+  `Cmd+K` clear work inside the terminal and the `Cmd+K Cmd+A` chord work in the editor.
+- Killing the pty host externally marks every terminal dead with the reference's message; the
+  next `createTerminal` lazily respawns the host (real restores sessions — delta).
+
+Deltas specific to 13:
+
+- **Exit handling**: this reference revision DISPOSES a terminal whose process exits; the course
+  pins the classic behavior, so the tab persists with the ported `formatMessageForTerminal`
+  banner (` * [exited with code N] `) and stdin is disabled (the real `disableStdin` too).
+- Shell resolution is `$SHELL` (no profiles/shell integration/`$PS1` injection); no reconnect,
+  no webgl renderer, no images protocol, no link handling beyond xterm's defaults, no
+  `terminal.integrated.commandsToSkipShell` interpretation.
+- `terminal.integrated.fontFamily` defaults to a fixed monospace stack (the real one defaults to
+  the editor font family); `fontSize` is 12 on macOS / 14 elsewhere (the reference constant).
+  A scrollback change resizes xterm's buffer live and trims content beyond the new cap.
+- The xterm theme is a fixed palette from the workbench colors (no theme registry yet);
+  `xterm.css`'s black viewport is overridden in `workbench.css` (load order matters).
+- `confirmOnKill` ports the reference enum (`never/editor/panel/always`, default `editor`).
+  Our terminals live only in the panel, so `editor` never asks; `panel`/`always` ask only when
+  the pty shell has child processes (a lazy `ps` scan — the real one monitors continuously).
+- **Occluded-window lesson** (found by the reload acceptance): `requestAnimationFrame` never
+  fires in a background window. `scheduleAtNextAnimationFrame` now backstops with a timer (the
+  same trick 08's view used), the bootstrap's `onStartupFinished` wait is a rAF/timer race, and
+  the panel fits on the part's synchronous `layout()` instead of relying on observers.
+- node-pty is native: esbuild keeps it external (`out/ptyHost.cjs` requires it from
+  `node_modules`) and `scripts/build.mjs` re-applies `+x` to its `spawn-helper` (some npm
+  installs skip the postinstall — without it every spawn fails with `posix_spawnp failed`).
+
 
 ## Language features (12): LSP is an extension pattern
 

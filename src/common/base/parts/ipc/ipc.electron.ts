@@ -33,3 +33,6 @@ export const MINI_IPC_CHANNEL = 'mini:ipc';
 
 /** the ipc channel main uses to hand the extension host's MessagePort to the renderer (11) */
 export const MINI_EXT_HOST_CHANNEL = 'mini:extHost';
+
+/** the ipc channel main uses to hand the pty host's MessagePort to the renderer (13) */
+export const MINI_PTY_HOST_CHANNEL = 'mini:ptyHost';

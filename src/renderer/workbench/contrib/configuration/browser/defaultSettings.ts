@@ -47,6 +47,43 @@ const defaultSettings: IConfigurationNode = {
 			type: 'boolean',
 			default: true,
 			description: 'Controls whether the Explorer should ask for confirmation when deleting a file via the trash.'
+		},
+		// 13: the terminal settings — real keys, values and ranges (defaults verified against
+		// the reference revision; the font family's real default is the editor's font family,
+		// the fixed monospace default here is the documented delta)
+		'terminal.integrated.fontSize': {
+			type: 'number',
+			// the reference: `defaultTerminalFontSize = isMacintosh ? 12 : 14`
+			default: navigator.platform.startsWith('Mac') ? 12 : 14,
+			minimum: 6,
+			maximum: 100,
+			description: 'Controls the font size in pixels of the terminal.'
+		},
+		'terminal.integrated.fontFamily': {
+			type: 'string',
+			default: `Menlo, Monaco, 'Courier New', monospace`,
+			description: 'Controls the font family of the terminal.'
+		},
+		'terminal.integrated.scrollback': {
+			type: 'number',
+			default: 1000,
+			description: 'Controls the maximum number of lines the terminal keeps in its buffer.'
+		},
+		'terminal.integrated.cursorBlinking': {
+			type: 'boolean',
+			default: false,
+			description: 'Controls whether the terminal cursor blinks.'
+		},
+		'terminal.integrated.macOptionIsMeta': {
+			type: 'boolean',
+			default: false,
+			description: 'Controls whether option/alt acts as the meta key in the terminal on macOS.'
+		},
+		'terminal.integrated.confirmOnKill': {
+			type: 'string',
+			enum: ['never', 'editor', 'panel', 'always'],
+			default: 'editor',
+			description: 'Controls whether to confirm killing terminals when they have child processes.'
 		}
 	}
 };

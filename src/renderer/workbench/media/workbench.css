@@ -1229,3 +1229,114 @@ body {
 .marker-dot.severity-hint {
 	background: #6e7681;
 }
+
+/* ---- terminal panel (13) ---- */
+
+.panel-tabs {
+	display: flex;
+	align-items: stretch;
+	flex: 1;
+	overflow: hidden;
+}
+
+.panel-actions {
+	display: flex;
+	align-items: center;
+	gap: 2px;
+	padding: 0 8px;
+}
+
+.panel-action {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 24px;
+	height: 24px;
+	border-radius: 4px;
+	color: var(--mini-foreground);
+	opacity: 0.7;
+	cursor: pointer;
+	font-size: 14px;
+	user-select: none;
+}
+
+.panel-action:hover {
+	background: rgba(255, 255, 255, 0.1);
+	opacity: 1;
+}
+
+.terminal-tab {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 0 10px 0 14px;
+	font-size: 12px;
+	color: var(--mini-watermark-dim);
+	border-right: 1px solid var(--mini-border);
+	cursor: pointer;
+	max-width: 220px;
+}
+
+.terminal-tab.active {
+	color: var(--mini-foreground);
+	border-bottom: 1px solid var(--mini-accent);
+}
+
+.terminal-tab.exited .terminal-tab-label {
+	opacity: 0.6;
+}
+
+.terminal-tab-label {
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.terminal-tab-close {
+	visibility: hidden;
+	font-size: 10px;
+	opacity: 0.7;
+}
+
+.terminal-tab:hover .terminal-tab-close {
+	visibility: visible;
+}
+
+.terminal-tab-close:hover {
+	opacity: 1;
+}
+
+.terminal-panel {
+	position: absolute;
+	inset: 0;
+	background: var(--mini-panel-background);
+}
+
+.terminal-instance {
+	position: absolute;
+	inset: 0;
+	padding: 4px 0 0 6px;
+}
+
+.terminal-xterm {
+	width: 100%;
+	height: 100%;
+}
+
+/* xterm renders its own scrollbar; keep it dark like the editor's */
+.terminal-xterm .xterm-viewport::-webkit-scrollbar {
+	width: 14px;
+}
+
+.terminal-xterm .xterm-viewport::-webkit-scrollbar-thumb {
+	background: rgba(121, 121, 121, 0.4);
+}
+
+/* xterm.css hardcodes a black viewport; the real theme comes from the theme registry (delta) */
+.terminal-xterm .xterm-viewport {
+	background-color: var(--mini-background);
+}
+
+.terminal-xterm .xterm {
+	padding: 2px 0 0 2px;
+}

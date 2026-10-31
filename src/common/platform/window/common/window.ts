@@ -41,6 +41,10 @@ export interface IWindowChannel {
 	startExtensionHost(): Promise<void>;
 	/** note: the port carries the RPC; this event only reports the process exit */
 	onDidExtensionHostExit: Event<number | undefined>;
+	/** 13: spawn the pty host utility process + transfer its port (same dance as 11) */
+	startPtyHost(): Promise<void>;
+	/** all terminals die together when this fires (the renderer lazily respawns) */
+	onDidPtyHostExit: Event<number | undefined>;
 	/** Developer: Reload Window — the workbench terminates the host first, then main reloads */
 	reloadWindow(): Promise<void>;
 }

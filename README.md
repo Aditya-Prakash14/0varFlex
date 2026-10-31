@@ -122,10 +122,19 @@ kill/respawn, resize propagation, config-driven fonts, exit banners.
 │   ├── hello/                  # toast round-trip sample
 │   ├── wordcount/              # status-bar + config sample
 │   └── toy-lang/               # the exercise-12 language: client (LSP) + server + grammar
+├── site/                       # the showcase site: gray & black, GSAP, no build step
+│   ├── index.html              # hero, features, deep dives, architecture, CLI, download, FAQ
+│   ├── styles.css              # the design system (tokens, components, responsive, reduced-motion)
+│   └── main.js                 # interactions + the GSAP layer (optional: the page works without it)
 ├── scripts/
 │   ├── build.mjs               # esbuild bundles (main · preload · renderer · hosts · samples)
+│   ├── dist.mjs                # production build → electron-builder (dmg + zip) → ad-hoc sign
+│   ├── updates-server.mjs      # the local update feed (serves dist/ on :8123)
+│   ├── make-icon.mjs           # draws build/icon.png + .icns ("the slashed zero")
 │   └── test.mjs                # bundles tests with esbuild, runs `node --test`
-└── tests/                      # 177 unit tests over the pure logic (plus a file-system harness)
+├── resources/cli/0varflex      # the shell launcher the PATH install symlinks
+├── electron-builder.config.cjs # asar allowlist, mac targets, signing hook, publish feed
+└── tests/                      # 184 unit tests over the pure logic (plus a file-system harness)
 ```
 
 The read-only VS Code reference tree lives alongside the repo
@@ -150,6 +159,11 @@ npx tsc --noEmit     # strict typecheck
 First run: the app creates `~/Library/Application Support/0varflex/` (its `settings.json`,
 `keybindings.json`, `storage.json` and the extension-scan cache). The bundled samples under
 `extensions/` are scanned from the app directory — nothing to install.
+
+To ship it (macOS): `npm run dist` writes `dist/0varflex-<version>-arm64.{dmg,zip}` plus the
+`latest-mac.yml` feed, and `node scripts/updates-server.mjs` serves a local update loop. The
+showcase site is plain files — `python3 -m http.server 4173` from the repo root, then
+<http://localhost:4173/site/>.
 
 A few things to try:
 

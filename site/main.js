@@ -8,6 +8,14 @@
 	'use strict';
 
 	const root = document.documentElement;
+
+	// A landing page opens at the top. Browser scroll restoration fights the scroll-trigger
+	// measurements (positions get computed against a half-restored scroll — the pan then paints
+	// from the wrong offset), and a reload is a fresh visit here.
+	if ('scrollRestoration' in history) {
+		history.scrollRestoration = 'manual';
+	}
+
 	const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 	const gsap = window.gsap;
 	const ScrollTrigger = window.ScrollTrigger;
@@ -121,7 +129,6 @@
 		const intro = gsap.timeline({ defaults: { ease: 'power3.out' }, delay: 0.1 });
 		intro
 			.fromTo('.nav', { opacity: 0, y: -16 }, { opacity: 1, y: 0, duration: 0.7, clearProps: 'opacity,transform' })
-			.fromTo('.rail', { opacity: 0 }, { opacity: 1, duration: 0.8 }, 0.2)
 			.to('[data-hero="1"]', { opacity: 1, y: 0, duration: 0.6 }, 0.15)
 			.to(words, { yPercent: 0, duration: 1.05, stagger: 0.09 }, 0.22)
 			.to('[data-hero="2"]', { opacity: 1, duration: 0.01 }, 0.22)
@@ -226,28 +233,57 @@
 		});
 
 		/* capabilities: pinned horizontal rail (desktop only) ------------------------ */
+		const setRailHidden = hidden => document.documentElement.classList.toggle('rail-hidden', hidden);
 		const media = gsap.matchMedia();
 		media.add('(min-width: 901px)', () => {
 			const section = document.querySelector('.horizon');
 			const track = document.querySelector('[data-horizon]');
 			const bar = document.querySelector('[data-horizon-progress]');
 			if (!section || !track) { return; }
+
 			const distance = () => Math.max(0, track.scrollWidth - document.documentElement.clientWidth);
+			// the sticky stage is one viewport tall; the section carries the extra scroll room
+			const applyHeight = () => {
+				section.style.height = '';
+				section.style.height = `${section.offsetHeight + distance()}px`;
+			};
+			applyHeight();
+
 			const tween = gsap.to(track, {
 				x: () => -distance(),
 				ease: 'none',
 				scrollTrigger: {
 					trigger: section,
 					start: 'top top',
-					end: () => '+=' + distance(),
-					pin: true,
+					end: 'bottom bottom',
 					scrub: 1,
-					anticipatePin: 1,
 					invalidateOnRefresh: true,
-					onUpdate: self => { if (bar) { bar.style.transform = `scaleX(${self.progress})`; } }
+					// cards pan across the whole viewport here: move the fixed rail out of their way
+					onUpdate: self => {
+						if (bar) { bar.style.transform = `scaleX(${self.progress})`; }
+						setRailHidden(self.isActive);
+					},
+					onEnter: () => setRailHidden(true),
+					onEnterBack: () => setRailHidden(true),
+					onLeave: () => setRailHidden(false),
+					onLeaveBack: () => setRailHidden(false)
 				}
 			});
-			return () => tween.scrollTrigger?.kill();
+
+			let resizeTimer;
+			const onResize = () => {
+				clearTimeout(resizeTimer);
+				resizeTimer = setTimeout(() => { applyHeight(); ScrollTrigger.refresh(); }, 180);
+			};
+			window.addEventListener('resize', onResize);
+
+			return () => {
+				window.removeEventListener('resize', onResize);
+				clearTimeout(resizeTimer);
+				tween.scrollTrigger?.kill();
+				section.style.height = '';
+				ScrollTrigger.refresh();
+			};
 		});
 
 		/* sessions: the stack settles as the next card covers it ---------------------- */
@@ -356,8 +392,14 @@
 			});
 		}
 
+		// keep trigger positions honest: fonts, a restored scroll position, and bfcache restores
+		// all land AFTER the first measurement — re-sync a few times, then once more on load
+		const resync = () => ScrollTrigger.refresh();
+		[150, 700, 1600].forEach(delay => window.setTimeout(resync, delay));
+		window.addEventListener('load', () => window.setTimeout(resync, 80));
+		window.addEventListener('pageshow', event => { if (event.persisted) { resync(); } });
 		if (document.fonts && document.fonts.ready) {
-			document.fonts.ready.then(() => ScrollTrigger.refresh());
+			document.fonts.ready.then(resync);
 		}
 	}
 })();

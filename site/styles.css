@@ -30,7 +30,6 @@
 	--mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
 	--shadow: 0 40px 90px -40px rgba(0, 0, 0, 0.95), 0 12px 34px -22px rgba(0, 0, 0, 0.9);
 	--container: min(1240px, 92vw);
-	--rail: 172px;
 }
 
 /* ---- reset / base -------------------------------------------------------- */
@@ -190,10 +189,14 @@ p code, .lead code, .note code, .stack-copy code, .faq code, .cli-list code, .pa
 
 /* ---- the section rail ------------------------------------------------------ */
 
+/* the rail lives in the LEFT GUTTER: it is pinned 170px left of the container's edge, so it can
+   never overlap the content — and only appears once that gutter exists (>= 1620px) */
 .rail {
-	position: fixed; left: max(20px, calc((100vw - var(--container)) / 2 - var(--rail))); top: 50%;
-	translate: 0 -50%; z-index: 70; display: none;
+	position: fixed; left: calc(50% - var(--container) / 2 - 170px); top: 50%;
+	translate: 0 -50%; z-index: 70; display: none; width: 150px;
+	transition: opacity 0.35s, visibility 0.35s;
 }
+.rail-hidden .rail { opacity: 0; visibility: hidden; }
 .rail nav { display: flex; flex-direction: column; gap: 2px; }
 .rail a {
 	position: relative; display: flex; align-items: baseline; gap: 10px;
@@ -209,7 +212,7 @@ p code, .lead code, .note code, .stack-copy code, .faq code, .cli-list code, .pa
 .rail a:hover { color: var(--dim); }
 .rail a.is-active { color: var(--text); }
 .rail a.is-active::before { background: linear-gradient(180deg, transparent, #fff, transparent); }
-@media (min-width: 1460px) { .rail { display: block; } }
+@media (min-width: 1620px) { .rail { display: block; } }
 
 /* ---- hero ------------------------------------------------------------------ */
 
@@ -379,7 +382,13 @@ p code, .lead code, .note code, .stack-copy code, .faq code, .cli-list code, .pa
 /* ---- 03 · capabilities (horizontal rail) ------------------------------------ */
 
 .horizon { padding-bottom: clamp(60px, 7vw, 90px); }
-.horizon-viewport { position: relative; overflow-x: clip; }
+/* the stage sticks (layout-driven) while the section's extra height provides the scroll room;
+   GSAP only drives the x pan — no pin-spacer, so scroll restoration cannot mis-place it */
+.horizon-viewport {
+	position: sticky; top: 0;
+	display: flex; flex-direction: column; justify-content: center;
+	min-height: 100svh; overflow-x: clip;
+}
 .horizon-track {
 	display: flex; gap: 20px; width: max-content;
 	padding: 4px max(4vw, calc((100vw - var(--container)) / 2)) 24px;
@@ -628,6 +637,7 @@ p code, .lead code, .note code, .stack-copy code, .faq code, .cli-list code, .pa
 
 @media (max-width: 900px) {
 	/* capabilities become a vertical list again */
+	.horizon-viewport { position: static; min-height: 0; }
 	.horizon-track { display: grid; width: auto; padding: 0 var(--container-gutter, 4vw) 0; gap: 14px; grid-template-columns: 1fr; }
 	.horizon-track { padding-inline: 4vw; }
 	.panel { width: auto; min-height: 0; }

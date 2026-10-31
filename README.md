@@ -1,9 +1,268 @@
-# mini-vscode
+<div align="center">
 
-A miniature VS Code built from scratch (Electron + TypeScript), porting structure and behavior
-from a local VS Code reference tree, exercise by exercise. See `git log` for the progression
-(instantiation → IPC → shell → commands → keybindings → configuration/storage → text model →
-editor view → files/workspace → extensions → language features → terminal).
+<pre>
+███╗   ███╗  ██╗  ███╗   ██╗  ██╗             ██╗   ██╗  ███████╗   ██████╗    ██████╗   ██████╗   ███████╗
+████╗ ████║  ██║  ████╗  ██║  ██║             ██║   ██║  ██╔════╝  ██╔════╝   ██╔═══██╗  ██╔══██╗  ██╔════╝
+██╔████╔██║  ██║  ██╔██╗ ██║  ██║   ███████   ██║   ██║  ███████╗  ██║        ██║   ██║  ██║  ██║  █████╗
+██║╚██╔╝██║  ██║  ██║╚██╗██║  ██║   ╚══════   ╚██╗ ██╔╝  ╚════██║  ██║        ██║   ██║  ██║  ██║  ██╔══╝
+██║ ╚═╝ ██║  ██║  ██║ ╚████║  ██║              ╚████╔╝   ███████║  ╚██████╗   ╚██████╔╝  ██████╔╝  ███████╗
+╚═╝     ╚═╝  ╚═╝  ╚═╝  ╚═══╝  ╚═╝               ╚═══╝    ╚══════╝   ╚═════╝    ╚═════╝   ╚═════╝   ╚══════╝
+</pre>
+
+**A miniature VS Code, built from scratch and ported from the real architecture — exercise by exercise.**
+
+[![Electron](https://img.shields.io/badge/Electron-45-47848F?logo=electron&logoColor=white)](https://www.electronjs.org/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+[![Tests](https://img.shields.io/badge/tests-177%20passing-brightgreen)](#testing)
+[![Exercises](https://img.shields.io/badge/exercises-00%20%E2%86%92%2013-blueviolet)](#the-exercises)
+[![Bundler](https://img.shields.io/badge/bundler-esbuild-FFCF00?logo=esbuild&logoColor=black)](https://esbuild.github.io/)
+
+</div>
+
+---
+
+## What is this?
+
+`mini-vscode` is a working miniature of VS Code: a real Electron app with a workbench shell,
+editor, explorer, file watcher, extension host, language features and an integrated terminal —
+each one **ported in structure from the actual VS Code source** (a local reference tree under
+`rebuild-vscode/reference/vscode`), not re-invented from blog posts.
+
+The course it follows builds the editor exercise by exercise (00 → 13 so far). Every exercise is
+implemented, unit-tested and then verified by **driving the real app** over the Chrome DevTools
+Protocol: synthetic keystrokes, mouse drags, clipboard pastes, process listing, RSS sampling.
+Where the port deliberately simplifies something, it says so — see the
+[delta sections](#language-features-12-lsp-is-an-extension-pattern) and
+[known deltas](#known-deltas-worth-knowing-before-extending).
+
+## What works today
+
+**Workbench shell** — titlebar, activity bar, sidebar, editor area (split groups + tabs), panel,
+status bar; draggable sashes with persisted sizes; focus tracking through context keys.
+
+**Editor** — virtualized line rendering (the 100 000-line gate), cursor/selection with mouse,
+double-click-word, drag-select, keyboard movement (word/line/page/home-toggle arrows), IME
+composition, undo/redo with cursor-state restore and save points, per-tab view state, dirty
+tabs, line numbers (`on`/`off`/`relative`), live font/tab settings.
+
+**Text model** — UTF-16 offsets, atomic edit operations with inverse operations, version ids,
+CRLF detection, save points (Alt-editing semantics).
+
+**Files & workspace** — a main-process file service behind one `file` channel; atomic saves
+(temp + fsync + rename); deletes to the OS trash; a recursive watcher with 100 ms coalescing and
+a stale-delete guard; Explorer with create/rename/delete/refresh; a single-folder workspace
+(`.mini/settings.json`), restored on relaunch; external-change reloads and dirty-file warnings.
+
+**Configuration** — registry-driven defaults, user `settings.json`, workspace settings, live
+reload, `keybindings.json` with rebind-wins semantics, chord support with a pending-chord
+indicator.
+
+**Commands & keys** — command registry with metadata, context keys, quick pick, command palette,
+and a real keybinding resolver (weights + when-clauses + user overrides).
+
+**Extensions** — an extension host in its own `utilityProcess`, activation events
+(`onStartupFinished`, `onCommand:…`, `onLanguage:…`), a `vscode` API subset (commands, window
+toasts/status bar, workspace configuration/documents, languages providers + diagnostics, env),
+console forwarding, clean shutdown on reload. Samples: `hello`, `wordcount`, and `toy-lang`
+(a real LSP client/server pair).
+
+**Language features** — owner-isolated markers/diagnostics, squiggles + gutter dots, a suggest
+widget (trigger characters, filtering, `isIncomplete` refetch, cancelling superseded fetches),
+hover tooltips with markdown-lite, and a problems picker driven from the status bar.
+
+**Terminal** — a separate pty host process owning `node-pty` sessions, 5 ms data batching, real
+flow control (pause/resume watermarks + acks), xterm.js front end, multiple terminals, tabs with
+kill/respawn, resize propagation, config-driven fonts, exit banners.
+
+## Architecture
+
+```
+      renderer (the workbench: parts · editor · explorer · terminal · suggest/hover)
+        │                        │                           │
+        │ window channel (IPC)   │ MessagePort               │ MessagePort
+        │                        │ (direct — main relays     │ (direct)
+        ▼                        ▼  neither end)             ▼
+   main process            extension host               pty host
+   window · storage        (utilityProcess)             (utilityProcess)
+   file service+watcher    the `vscode` API for         node-pty sessions
+   scanner · menus         the sample extensions        batching + flow control
+        │                        ▲                           ▲
+        └────── utilityProcess.fork ───────────────────────────┘
+```
+
+- **main** owns the OS: windows, the file system + watcher, dialogs, the extension scanner and
+  the two utility processes. Cross-process RPC rides one hand-written proxy-channel IPC (02).
+- **renderer** is the workbench; it talks to main over the `window`/`storage`/`file` channels,
+  and to the extension/pty hosts over transferred `MessagePort`s (no relaying through main).
+- **utility processes** keep native/risky work out of the UI thread: extensions can crash
+  without taking the window down, and `yes` floods the pty host, not the renderer.
+
+## Repository layout
+
+```
+mini-vscode/
+├── src/
+│   ├── common/                 # shared: base (lifecycle, events, uri, ipc),
+│   │                           # platform (configuration, files, storage, log, window,
+│   │                           #           extensions, terminal), editor model core
+│   ├── main/                   # Electron main: window channels, file service, menu,
+│   │                           # extension scanner, utility-process starters
+│   ├── preload/                # the contextBridge surface (IPC + MessagePort bridges)
+│   ├── renderer/               # the workbench
+│   │   ├── base/               # DOM helpers, split view
+│   │   ├── platform/           # renderer platform: commands, context keys, keybindings,
+│   │   │                       # quick input
+│   │   ├── editor/             # the code editor: view, layers, controllers, contribs
+│   │   │                       # (suggest, hover, marker decorations)
+│   │   └── workbench/          # contrib (files, problems, terminal), services (editor,
+│   │                           # markers, extensions, languages), parts, bootstrap
+│   ├── extHost/                # the extension host entry + the `vscode` API shim
+│   └── ptyHost/                # the pty host: node-pty wrapper, process registry, entry
+├── extensions/
+│   ├── hello/                  # toast round-trip sample
+│   ├── wordcount/              # status-bar + config sample
+│   └── toy-lang/               # the exercise-12 language: client (LSP) + server + grammar
+├── scripts/
+│   ├── build.mjs               # esbuild bundles (main · preload · renderer · hosts · samples)
+│   └── test.mjs                # bundles tests with esbuild, runs `node --test`
+└── tests/                      # 177 unit tests over the pure logic (plus a file-system harness)
+```
+
+The read-only VS Code reference tree lives alongside the repo
+(`../rebuild-vscode/reference/vscode`) and every ported file cites paths into it.
+
+## Getting started
+
+**Requirements:** Node 22+ (developed on Node 26), macOS. The port targets macOS defaults
+(`Cmd` bindings, `$SHELL`, running the pty host under Electron's node); Windows/Linux would
+need their platform defaults in a handful of files.
+
+```bash
+npm install          # electron, esbuild, typescript, node-pty, @xterm/xterm
+npm start            # build + launch the app
+# or, for iteration:
+npm run build        # one-off build into out/
+npm run watch        # rebuild on change (keep it running in a second terminal)
+npm test             # bundle + run the unit tests (node's built-in runner, zero deps)
+npx tsc --noEmit     # strict typecheck
+```
+
+First run: the app creates `~/Library/Application Support/mini-vscode/` (its `settings.json`,
+`keybindings.json`, `storage.json` and the extension-scan cache). The bundled samples under
+`extensions/` are scanned from the app directory — nothing to install.
+
+A few things to try:
+
+- open a folder (Explorer → Open Folder) and edit a file; watch the dirty dot and `Cmd+S`;
+- `Cmd+Alt+P` for the command palette (from `keybindings.json`), `Cmd+J` for the terminal;
+- open `extensions/toy-lang/sample.cfg` (shipped with the toy language) to watch the LSP server
+  produce diagnostics, completions and hover docs — the last three lines are deliberately wrong;
+- type `yes` in the terminal for a few seconds and watch the flow-control pauses in the log.
+
+> **node-pty note:** newer npm versions ask before running install scripts. If the terminal
+> fails with `posix_spawnp failed`, run `npm install-scripts approve node-pty` (or
+> `chmod +x node_modules/node-pty/prebuilds/<platform>/spawn-helper`). `scripts/build.mjs`
+> re-applies the `+x` on every build, so a plain rebuild also heals it.
+
+## Testing
+
+Two layers, both part of the workflow:
+
+1. **Unit tests** (`npm test`) over the pure logic: the text model and its edit/undo semantics,
+   the keybinding resolver (including the terminal `Cmd+K` chord matrix), the marker service's
+   owner isolation, the toy grammar, LSP framing (byte lengths, coalesced frames, >64 KB
+   payloads), terminal batching and flow-control watermarks, env curation, the file watcher,
+   the in-memory file-system harness, and more — **177 tests**, no test dependencies (esbuild
+   bundles, `node --test` runs).
+2. **Live acceptance** — every exercise was verified against the running app over CDP:
+   synthetic typing and keybindings, mouse drags on sashes, clipboard pastes, screenshots,
+   `ps`/RSS sampling and log greps. Examples of what that caught: the occluded-window
+   `requestAnimationFrame` hang (a reload could never finish in a background window), the
+   size-observer that swallowed resizes, a missing `port.start()` on the pty host's MessagePort,
+   and extension-contributed settings never reaching the host.
+
+## The exercises
+
+Each commit is one exercise: implementation + tests + live acceptance + documented deltas.
+
+| # | Commit | What it builds |
+| --- | --- | --- |
+| 01 (+ 00) | `instantiation core + lifecycle/event/uri primitives` | the DI container, disposables, events, URI, platform primitives |
+| 02 | `proxy-channel IPC across main and renderer` | channels, proxies, the wire envelope, preload bridge |
+| 03 | `workbench shell with parts and split views` | titlebar/activitybar/sidebar/editor/panel/statusbar, sashes, layout state |
+| 04 | `commands, context keys, quick pick and command palette` | the command registry, context keys, quick input, palette |
+| 05 | `keybinding resolution with chords and user overrides` | the resolver (weights, when-clauses, chords), `keybindings.json` |
+| 06 | `configuration layering, live reload, storage service` | defaults < user < workspace settings, live push, storage |
+| 07 | `text model with edits, undo stack and save points` | the buffer, edit operations, undo/redo, versions |
+| 08 | `editor view with cursor, selection, input and virtualization` | the rendering layers, controllers, IME, perf gate |
+| 09 | `editor service, groups, tabs and dirty lifecycle` | open/reuse/close, groups, tabs, dirty + save flows |
+| 10 | `file service, watcher, explorer, workspace` | the file channel, atomic writes, watcher, tree, workspace folder |
+| 11 | `extension host, API subset, sample extensions` | the utility-process host, `vscode` API shim, activation events |
+| 12 | `markers, suggest, hover and an LSP toy language` | providers ↔ LSP, diagnostics, the suggest/hover widgets, problems |
+| 13 | `pty host, flow-controlled terminal, xterm panel` | the pty process, batching + acks, xterm tabs, resize |
+
+(Exercise 00's primitives — lifecycle, events, URI, instantiation — landed in the first commit
+alongside 01.)
+
+## How this was built
+
+- **Port from the reference, not from memory.** Every ported file cites the reference paths in
+  its header; constants (flow-control watermarks, batching intervals, severity bit flags, default
+  keybindings, font sizes) were read out of the reference revision rather than guessed. Where the
+  exercise prose and the reference disagree, the reference wins and the deviation is noted in
+  code; where the course pins a classic behavior the revision has since dropped (the terminal's
+  exit banner), the pin wins and the delta is documented.
+- **Deltas are first-class.** The sections below list every deliberate simplification, so
+  extending the project starts from an honest map instead of archaeology.
+- **Acceptance drives the last mile.** Unit tests prove the logic; the CDP runs prove the
+  product (focus states, layout timing, process lifecycles, IPC ports — the class of bug that
+  unit tests never see).
+
+---
+
+## Language features (12): LSP is an extension pattern
+
+The workbench knows only *providers*; the LSP bridge lives in an extension:
+
+- `extensions/toy-lang/` — a real client/server pair: `client/src/lsp-client.ts` speaks
+  JSON-RPC over stdio with `Content-Length` **byte** framing, request ids, `$/cancelRequest`,
+  stderr forwarding (`[toy-lang] server stderr:`) and a dispose that reaps the child. The server
+  (`server/src/server.ts`) is built on the real `vscode-languageserver` package with a PURE
+  grammar (`analysis.ts`) behind the handlers; `spawn(process.execPath, …, ELECTRON_RUN_AS_NODE=1)`
+  is how the extension host runs it as plain node. The server also exits when its stdin closes
+  (parent-death), so no zombies survive a reload or a window close.
+- The provider SPI mirrors 11: `languages.registerCompletionItemProvider` /
+  `registerHoverProvider` / `createDiagnosticCollection` → RPC → `MainThreadLanguageFeatures` →
+  a `LanguageFeatureRegistry`-lite (exact languageId only — no glob/pattern selectors) → the
+  editor consults it on demand. Superseded fetches are cancelled across the port (the host fires
+  the provider's token; the toy client turns it into `$/cancelRequest`) and stale results are
+  dropped by request generation + model-version recheck.
+- `services/markers/` — the ported marker store: keyed by (resource, **owner**), so one
+  provider's update never clears another's; an empty update removes the tuple; reads take the
+  severity bit mask; `onMarkerChanged` reports the deduped resource set batched on a microtask.
+- Editor contribs: suggest (trigger rules below), hover (300ms dwell, markdown-lite,
+  `Hover.range` highlight, marker tooltips) and marker decorations (SVG-wave squiggles + gutter
+  dots in the 08 overlay layers).
+- Problems: the left status entry `⨯ N  ⚠ M` opens 04's quick pick over the marker service;
+  picking opens the resource with the marker's **range** selected.
+
+Deltas specific to 12:
+
+- `editor.quickSuggestions` is effectively **off**: while the widget is closed only an explicit
+  `Ctrl+Space` or a provider `triggerCharacter` (`=`, `[`, ` ` for toy-lang) opens it; word
+  characters re-filter only while open. (The modern default is 'on'.)
+- One provider is consulted per feature (no merging across providers), no docs side panel, no
+  snippets/placeholder parsing, no preview mode or partial accept, no commit characters. The
+  accept clamps the replacement range to the cursor on the item's line (a provider range
+  extending past the cursor is truncated — revisit for mid-word ranges).
+- Hover is a single plain panel (not interactive-with-scroll-into-editor), markdown-lite only
+  (paragraphs, `` `code` ``, fences). `editor.suggest.maxVisibleSuggestions` no longer exists in
+  the reference revision: the widget uses a fixed 8-row window with scrolling.
+- Composition (IME) suppresses completion fetches; the composition path itself was not exercised
+  live in the acceptance (only via the guard's code path).
+- `toyLang.maxNumberOfProblems` (default 100) truncates server-side with a logged proof; the
+  setting reaches the host because the configuration mirror now snapshots the configuration
+  REGISTRY (extension-contributed keys included) instead of a hardcoded key list.
 
 ## The terminal (13): pty host + flow control + xterm
 
@@ -52,51 +311,6 @@ Deltas specific to 13:
 - node-pty is native: esbuild keeps it external (`out/ptyHost.cjs` requires it from
   `node_modules`) and `scripts/build.mjs` re-applies `+x` to its `spawn-helper` (some npm
   installs skip the postinstall — without it every spawn fails with `posix_spawnp failed`).
-
-
-## Language features (12): LSP is an extension pattern
-
-The workbench knows only *providers*; the LSP bridge lives in an extension:
-
-- `extensions/toy-lang/` — a real client/server pair: `client/src/lsp-client.ts` speaks
-  JSON-RPC over stdio with `Content-Length` **byte** framing, request ids, `$/cancelRequest`,
-  stderr forwarding (`[toy-lang] server stderr:`) and a dispose that reaps the child. The server
-  (`server/src/server.ts`) is built on the real `vscode-languageserver` package with a PURE
-  grammar (`analysis.ts`) behind the handlers; `spawn(process.execPath, …, ELECTRON_RUN_AS_NODE=1)`
-  is how the extension host runs it as plain node. The server also exits when its stdin closes
-  (parent-death), so no zombies survive a reload or a window close.
-- The provider SPI mirrors 11: `languages.registerCompletionItemProvider` /
-  `registerHoverProvider` / `createDiagnosticCollection` → RPC → `MainThreadLanguageFeatures` →
-  a `LanguageFeatureRegistry`-lite (exact languageId only — no glob/pattern selectors) → the
-  editor consults it on demand. Superseded fetches are cancelled across the port (the host fires
-  the provider's token; the toy client turns it into `$/cancelRequest`) and stale results are
-  dropped by request generation + model-version recheck.
-- `services/markers/` — the ported marker store: keyed by (resource, **owner**), so one
-  provider's update never clears another's; an empty update removes the tuple; reads take the
-  severity bit mask; `onMarkerChanged` reports the deduped resource set batched on a microtask.
-- Editor contribs: suggest (trigger rules below), hover (300ms dwell, markdown-lite,
-  `Hover.range` highlight, marker tooltips) and marker decorations (SVG-wave squiggles + gutter
-  dots in the 08 overlay layers).
-- Problems: the left status entry `⨯ N  ⚠ M` opens 04's quick pick over the marker service;
-  picking opens the resource with the marker's **range** selected.
-
-Deltas specific to 12:
-
-- `editor.quickSuggestions` is effectively **off**: while the widget is closed only an explicit
-  `Ctrl+Space` or a provider `triggerCharacter` (`=`, `[`, ` ` for toy-lang) opens it; word
-  characters re-filter only while open. (The modern default is 'on'.)
-- One provider is consulted per feature (no merging across providers), no docs side panel, no
-  snippets/placeholder parsing, no preview mode or partial accept, no commit characters. The
-  accept clamps the replacement range to the cursor on the item's line (a provider range
-  extending past the cursor is truncated — revisit for mid-word ranges).
-- Hover is a single plain panel (not interactive-with-scroll-into-editor), markdown-lite only
-  (paragraphs, `` `code` ``, fences). `editor.suggest.maxVisibleSuggestions` no longer exists in
-  the reference revision: the widget uses a fixed 8-row window with scrolling.
-- Composition (IME) suppresses completion fetches; the composition path itself was not exercised
-  live in the acceptance (only via the guard's code path).
-- `toyLang.maxNumberOfProblems` (default 100) truncates server-side with a logged proof; the
-  setting reaches the host because the configuration mirror now snapshots the configuration
-  REGISTRY (extension-contributed keys included) instead of a hardcoded key list.
 
 ## Known deltas worth knowing before extending
 

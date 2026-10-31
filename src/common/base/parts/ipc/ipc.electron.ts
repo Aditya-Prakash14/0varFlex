@@ -30,3 +30,6 @@ export type WireMessage = WireRequest | WireSubscribe | WireUnsubscribe | WireRe
 
 /** The Electron channel name both transports send on. */
 export const MINI_IPC_CHANNEL = 'mini:ipc';
+
+/** the ipc channel main uses to hand the extension host's MessagePort to the renderer (11) */
+export const MINI_EXT_HOST_CHANNEL = 'mini:extHost';

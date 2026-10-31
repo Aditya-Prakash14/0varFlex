@@ -7,6 +7,15 @@ editor view).
 
 ## Known deltas worth knowing before extending
 
+- **Extensions**: no marketplace, install/update/disable UI, extension kinds, proposed APIs,
+  menus/views contributions, telemetry or extension storage; a SINGLE extension host process per
+  window (`utilityProcess`, the port transferred from main). `engines.mini-vscode` is the only
+  accepted engine — pointing the scanner at `~/.vscode/extensions` parses the manifests and
+  skips them gracefully (real extensions would die on the API gaps; this is by design).
+- **Extension host internals**: the `vscode` module is injected by patching `Module._load`;
+  console output is attributed by a "current extension" marker (the reference walks the call
+  stack, which only works because its host files exist unbundled); documents sync FULL text with
+  the reference's change DTO shape (so 12 can switch to deltas without API churn).
 - **File stack**: one `file` provider (disk) running in main behind the `file` channel (02's
   hand-written `FileIOChannel` is retired); string-only content (no streams/VSBuffer), no UNC or
   network handling; deletes go to the OS trash with an `rm` fallback on volumes without one.

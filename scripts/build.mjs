@@ -13,11 +13,16 @@ await mkdir(out, { recursive: true });
 await cp(path.join(root, 'src/renderer/index.html'), path.join(out, 'index.html'));
 await cp(path.join(root, 'src/renderer/workbench/media/workbench.css'), path.join(out, 'workbench.css'));
 
-// 2. three bundles: main process, preload, renderer
+// 2. three bundles: main process, preload, renderer, plus the extension host and the samples
 const bundles = [
 	{ in: 'src/main/main.ts', out: 'main.js', platform: 'node', format: 'esm' },
 	{ in: 'src/preload/preload.ts', out: 'preload.cjs', platform: 'node', format: 'cjs' },
 	{ in: 'src/renderer/bootstrap.ts', out: 'renderer.js', platform: 'browser', format: 'esm' },
+	// 11: the extension host runs as a utility process (CJS, like the reference's node host)
+	{ in: 'src/extHost/main.ts', out: 'extHost.cjs', platform: 'node', format: 'cjs' },
+	// 11: the sample extensions (the reference builds these with gulpfile.extensions.ts; 1% scale)
+	{ in: 'extensions/hello/src/extension.ts', out: '../extensions/hello/out/extension.js', platform: 'node', format: 'cjs' },
+	{ in: 'extensions/wordcount/src/extension.ts', out: '../extensions/wordcount/out/extension.js', platform: 'node', format: 'cjs' },
 ];
 
 const configs = bundles.map(b => ({
@@ -27,7 +32,7 @@ const configs = bundles.map(b => ({
 	format: b.format,
 	bundle: true,
 	sourcemap: true,
-	external: ['electron'],
+	external: ['electron', 'vscode'],
 	// jsonc-parser's UMD entry uses dynamic require; point at its ESM build
 	alias: { 'jsonc-parser': path.join(root, 'node_modules/jsonc-parser/lib/esm/main.js') },
 }));

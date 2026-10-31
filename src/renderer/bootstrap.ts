@@ -39,6 +39,13 @@ import { ExplorerView } from './workbench/contrib/files/browser/explorerView.js'
 import { registerFileCommands, EXPLORER_ID } from './workbench/contrib/files/browser/fileCommands.js';
 import { confirmDialog } from './workbench/browser/parts/editor/dialogs/confirmDialog.js';
 import { WorkspaceContextService, createWorkspaceFolder, workspaceSettingsUri } from '../common/platform/workspace/common/workspace.js';
+import type { IExtensionScanResult } from '../common/platform/extensions/common/extensionScanner.js';
+import { ExtensionService } from './workbench/services/extensions/extensionService.js';
+import { ExtensionHostManager } from './workbench/services/extensions/extensionHostManager.js';
+import { registerAllMainThreadServices, snapshotConfiguration, WorkbenchDocuments } from './workbench/services/extensions/mainThreadServices.js';
+import { registerExtensionContributions } from './workbench/services/extensions/extensionRegistries.js';
+import { LanguageService } from './workbench/services/languages/common/languageService.js';
+import { NotificationService } from './workbench/services/notifications/browser/notificationService.js';
 import { registerLayoutCommands, SHOW_ALL_COMMANDS_ID } from './workbench/contrib/layout/browser/layoutActions.js';
 import { CommandService } from './workbench/services/commands/common/commandService.js';
 import { CodeEditorService } from './workbench/services/editor/browser/codeEditorService.js';
@@ -448,6 +455,74 @@ async function main(): Promise<void> {
 	}
 	updateWorkspaceUi();
 
+	// ---- the extension system (exercise 11): scan → contributions → the host process
+	const languageService = new LanguageService(logService);
+	const notifications = new NotificationService();
+	const extensionService = new ExtensionService(logService);
+	const mainThreadServiceHost = {
+		logService,
+		commandService,
+		configurationService,
+		notifications,
+		statusbar: workbench.layout.statusbar,
+		languageService,
+		codeEditorService,
+		editorService,
+		editorPart: workbench.layout.editor,
+		getExtensionService: () => extensionService
+	};
+	const documentMirror = new WorkbenchDocuments(mainThreadServiceHost);
+	let hostManagerRef: ExtensionHostManager | undefined;
+	const hostManager = new ExtensionHostManager(windowChannel, server => {
+		// the host's calls land in these MainThreadX services once the port exists
+		registerAllMainThreadServices(server, mainThreadServiceHost, documentMirror, hostManagerRef!);
+	});
+	hostManagerRef = hostManager;
+	hostManager.onDidExit(code => {
+		logService.error(`the extension host exited (code ${code ?? 'unknown'})`);
+		extensionService.setHostUnavailable();
+	});
+	// the reference's "Extension activation failed" notification; the log line is already there
+	extensionService.onDidFailActivation(({ identifier, error }) => {
+		void notifications.show({ severity: 'error', message: `Extension '${identifier}' activation failed: ${error}` });
+	});
+
+	const scanResult = (await windowChannel.scanExtensions()) as IExtensionScanResult;
+	logService.info(`extension scan: ${scanResult.extensions.length} found, ${scanResult.errors.length} skipped`);
+	const windowInfo = await windowChannel.getInfo();
+	await extensionService.initialize({
+		scanned: scanResult.extensions,
+		host: hostManager,
+		registerContributions: scanned => registerExtensionContributions(scanned, { extensionService, languageService, logService }),
+		initData: {
+			extensions: scanResult.extensions.map(entry => entry.description),
+			userDataPath,
+			logLevel: 'info',
+			env: { appName: 'mini-vscode', appVersion: windowInfo.appVersion }
+		}
+	});
+
+	// 04's CommandService gets the activation seam (the TODO in its source is gone)
+	commandService.setActivationHook(id => extensionService.activateByEvent(`onCommand:${id}`));
+
+	// live configuration → the host's mirror (the reference pushes per-key; we re-snapshot)
+	configurationService.onDidChangeConfiguration(event => {
+		documentMirror.pushConfiguration(snapshotConfiguration(configurationService), event.change.keys);
+	});
+
+	// Developer: Reload Window — terminate the host cleanly FIRST, then reload (the acceptance
+	// checks `ps` for leaks across five reloads)
+	CommandsRegistry.registerCommand('workbench.action.reloadWindow', async () => {
+		await extensionService.shutdown();
+		await windowChannel.reloadWindow();
+	});
+	CommandMetadata.register({ id: 'workbench.action.reloadWindow', title: 'Developer: Reload Window', category: 'Developer' });
+	keybindingService.rebuild();
+
+	// `onStartupFinished`: after the first render pass (a rAF), like the reference's startup event
+	await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
+	void extensionService.activateStartupFinished();
+
 	// ---- debug readout: proves settings live reload until 08/10 replace it with real consumers
 	// shortcut: temporary; dies when editor/sidebar read these settings for real
 	const updateConfigDebug = (): void => {
@@ -604,6 +679,19 @@ async function main(): Promise<void> {
 		},
 		editor: devEditor,
 		editors: devEditors,
+		extensions: {
+			getScanSummary: () => ({
+				found: scanResult.extensions.length,
+				errors: scanResult.errors.length,
+				ids: scanResult.extensions.map(entry => entry.description.identifier)
+			}),
+			getStates: () => extensionService.getActivationRecords(),
+			isHostAlive: () => hostManager.isAlive,
+			getToastCount: () => notifications.visibleCount,
+			isCommandInPalette: (id: string) => !!CommandMetadata.get(id),
+			reloadWindow: () => commandService.executeCommand('workbench.action.reloadWindow'),
+			activateStartupFinished: () => extensionService.activateStartupFinished()
+		},
 		files: {
 			openFolder: (fsPath: string) => setFolder(URI.file(fsPath)),
 			closeFolder: () => closeFolder(),

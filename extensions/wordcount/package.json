@@ -1,0 +1,39 @@
+{
+	"name": "wordcount",
+	"publisher": "mini",
+	"version": "1.0.0",
+	"engines": {
+		"mini-vscode": "^0.0.1"
+	},
+	"main": "./out/extension.js",
+	"activationEvents": [
+		"onLanguage:plaintext",
+		"onCommand:wordcount.toggleWhitespace"
+	],
+	"contributes": {
+		"commands": [
+			{
+				"command": "wordcount.toggleWhitespace",
+				"title": "Toggle Whitespace Counting",
+				"category": "Word Count"
+			}
+		],
+		"configuration": {
+			"title": "Word Count",
+			"properties": {
+				"wordcount.includeWhitespace": {
+					"type": "boolean",
+					"default": false,
+					"description": "Count whitespace-split tokens instead of lines with content."
+				}
+			}
+		},
+		"languages": [
+			{
+				"id": "wordcount-log",
+				"aliases": ["Word Count Log"],
+				"extensions": ["wordlog"]
+			}
+		]
+	}
+}

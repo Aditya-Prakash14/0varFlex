@@ -1,0 +1,28 @@
+{
+	"name": "hello",
+	"publisher": "mini",
+	"version": "1.0.0",
+	"engines": {
+		"mini-vscode": "^0.0.1"
+	},
+	"main": "./out/extension.js",
+	"activationEvents": [
+		"onCommand:hello.sayHello",
+		"onStartupFinished"
+	],
+	"contributes": {
+		"commands": [
+			{
+				"command": "hello.sayHello",
+				"title": "Say Hello",
+				"category": "Hello"
+			}
+		],
+		"keybindings": [
+			{
+				"command": "hello.sayHello",
+				"key": "cmd+alt+h"
+			}
+		]
+	}
+}

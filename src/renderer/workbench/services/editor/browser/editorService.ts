@@ -87,7 +87,8 @@ export class EditorService extends Disposable {
 	}
 
 	getInput(resource: URI): TextEditorInput | undefined {
-		return this._inputs.get(resource.toString());
+		// the same canonical spelling resolveInput uses (10's double-slash lesson)
+		return this._inputs.get(normalizeFileResource(resource).toString());
 	}
 
 	// ---- open
@@ -184,7 +185,7 @@ export class EditorService extends Disposable {
 
 	handleFileChanges(event: FileChangesEvent): void {
 		for (const change of event.changes) {
-			const input = this._inputs.get(change.resource.toString());
+			const input = this._inputs.get(normalizeFileResource(change.resource).toString());
 			if (!input) {
 				continue;
 			}

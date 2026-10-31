@@ -25,11 +25,29 @@ export class CommandService extends Disposable implements ICommandService {
 		super();
 	}
 
+	/**
+	 * 11: the extension-activation seam (ported from the reference's CommandService): before a
+	 * command dispatches, `onCommand:${id}` may need to activate its extension. The workbench
+	 * installs the hook as soon as the extension service exists.
+	 */
+	private _activationHook: ((commandId: string) => Promise<unknown>) | undefined;
+
+	setActivationHook(hook: (commandId: string) => Promise<unknown>): void {
+		this._activationHook = hook;
+	}
+
 	async executeCommand<R = unknown>(id: string, ...args: unknown[]): Promise<R | undefined> {
 		this._logService.trace(`CommandService#executeCommand ${id}`);
 
-		// TODO(11): this is where extension activation hooks in — upstream activates
-		// 'onCommand:${id}' before dispatching to a command an extension might own
+		// activate first: an extension command must exist before lookup
+		if (this._activationHook) {
+			try {
+				await this._activationHook(id);
+			} catch (error) {
+				this._logService.warn(`activation for '${id}' failed: ${(error as Error).message}`);
+			}
+		}
+
 		const command = CommandsRegistry.getCommand(id);
 		if (!command) {
 			const error = new Error(`command '${id}' not found`);

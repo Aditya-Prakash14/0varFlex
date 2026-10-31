@@ -6,6 +6,7 @@
 // `createModel` is get-or-create here (the real service creates; the workbench then looks the
 // model up) — with one model per URI the difference is only the return of the existing model.
 
+import { Emitter, Event } from '../../../../../common/base/common/event.js';
 import { Disposable } from '../../../../../common/base/common/lifecycle.js';
 import { TextModel } from '../../../../../common/editor/common/model/textModel.js';
 import { URI } from '../../../../../common/base/common/uri.js';
@@ -19,6 +20,12 @@ export class CodeEditorService extends Disposable {
 
 	private readonly _models = new Map<string, IModelEntry>();
 
+	/** 11: the extension host's document mirror follows model lifetime */
+	private readonly _onDidAddModel = this._register(new Emitter<{ model: TextModel; resource: URI }>());
+	readonly onDidAddModel: Event<{ model: TextModel; resource: URI }> = this._onDidAddModel.event;
+	private readonly _onDidDisposeModel = this._register(new Emitter<{ resource: URI }>());
+	readonly onDidDisposeModel: Event<{ resource: URI }> = this._onDidDisposeModel.event;
+
 	/** get-or-create the model for a resource */
 	createModel(uri: URI, text: string): TextModel {
 		const key = uri.toString();
@@ -28,6 +35,7 @@ export class CodeEditorService extends Disposable {
 		}
 		const model = new TextModel(text);
 		this._models.set(key, { model, refs: 0 });
+		this._onDidAddModel.fire({ model, resource: uri });
 		return model;
 	}
 
@@ -65,6 +73,7 @@ export class CodeEditorService extends Disposable {
 		if (entry.refs === 0) {
 			entry.model.dispose();
 			this._models.delete(key);
+			this._onDidDisposeModel.fire({ resource: URI.parse(key) });
 		}
 	}
 

@@ -1,4 +1,6 @@
 import { app, BrowserWindow, ipcMain } from 'electron';
+import { Event } from '../common/base/common/event.js';
+import type { ILogService } from '../common/platform/log/common/log.js';
 import { existsSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -15,6 +17,16 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 let storage: StorageMainService;
 let fileService: FileService;
+
+// main-side log surface (the renderer has its own through the log channel)
+const mainLogService: ILogService = {
+	_serviceBrand: undefined,
+	onDidLog: Event.None,
+	trace: () => { /* console noise */ },
+	info: message => console.log('[main]', message),
+	warn: message => console.warn('[main]', message),
+	error: message => console.error('[main]', typeof message === 'string' ? message : message.message)
+};
 
 /** `mini-vscode somefile.txt` — the CLI seed (14 grows this into a real argv parser) */
 function fileFromArgv(argv: string[]): string | null {
@@ -67,7 +79,7 @@ ipcMain.handle('mini:ping', (_event, payload: string) => ({
 const ipc = new MainProcessIpc((server, store, sender) => {
 	const window = BrowserWindow.fromWebContents(sender);
 	if (window) {
-		registerChannels(window, server, store, storage, fileService, openedFile);
+		registerChannels(window, server, store, storage, fileService, openedFile, mainLogService);
 	}
 });
 

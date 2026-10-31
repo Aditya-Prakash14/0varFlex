@@ -9,6 +9,9 @@ import { LogLevel } from '../../../common/platform/log/common/log.js';
 import { FileService } from '../../../common/platform/files/common/fileService.js';
 import { createFileServiceWire, IFileServiceWire } from '../../../common/platform/files/common/fileIpc.js';
 import { IWindowChannel, IWindowInfo, WindowMenuCommand } from '../../../common/platform/window/common/window.js';
+import { ExtensionHostLauncher, scanExtensionsMain } from '../../extensionHost.js';
+import type { ILogService } from '../../../common/platform/log/common/log.js';
+import type { IExtensionScanResult } from '../../../common/platform/extensions/common/extensionScanner.js';
 import { StorageMainService } from '../../../common/platform/storage/common/storageIpc.js';
 import { IWindowContext } from './ipcMain.js';
 
@@ -39,7 +42,7 @@ class WindowChannelService implements IWindowChannel {
 	private _closeAllowed = false;
 	private _closeWatchdog: ReturnType<typeof setTimeout> | undefined;
 
-	constructor(private readonly _window: BrowserWindow, store: DisposableStore, private readonly _openedFile: string | null) {
+	constructor(private readonly _window: BrowserWindow, store: DisposableStore, private readonly _openedFile: string | null, private readonly _logService: ILogService) {
 		store.add(toDisposable(() => this._onDidChangeFocus.dispose()));
 		store.add(toDisposable(() => this._onMenuCommand.dispose()));
 		store.add(toDisposable(() => this._onDidChangeFullScreen.dispose()));
@@ -81,6 +84,10 @@ class WindowChannelService implements IWindowChannel {
 			this._window.off('leave-full-screen', onLeaveFullScreen);
 		}));
 
+		// the extension host belongs to this window: killing it on navigation/close is what keeps
+		// five reloads from accumulating utility processes
+		store.add(toDisposable(() => this._extHostLauncher.kill()));
+
 		// this window's service is the routing target for menu commands
 		windowServices.set(this._window.id, this);
 		store.add(toDisposable(() => windowServices.delete(this._window.id)));
@@ -90,7 +97,8 @@ class WindowChannelService implements IWindowChannel {
 		return {
 			id: this._window.id,
 			bounds: this._window.getBounds(),
-			focused: this._window.isFocused()
+			focused: this._window.isFocused(),
+			appVersion: app.getVersion()
 		};
 	}
 
@@ -114,6 +122,11 @@ class WindowChannelService implements IWindowChannel {
 	async showItemInFolder(path: string): Promise<void> {
 		shell.showItemInFolder(path);
 	}
+
+	// ---- the extension host (11): one utility process per window, port-transferred to the renderer
+
+	private readonly _extHostLauncher: ExtensionHostLauncher =
+		new ExtensionHostLauncher(() => this._window.webContents);
 
 	/** 10: the Open Folder picker (ported from IFileDialogService.showOpenDialog) */
 	async showOpenFolderDialog(options?: { title?: string; defaultPath?: string }): Promise<string | null> {
@@ -158,6 +171,22 @@ class WindowChannelService implements IWindowChannel {
 		return app.getPath('userData');
 	}
 
+	async scanExtensions(): Promise<IExtensionScanResult> {
+		return scanExtensionsMain(this._logService);
+	}
+
+	async startExtensionHost(): Promise<void> {
+		this._extHostLauncher.start();
+	}
+
+	get onDidExtensionHostExit(): Event<number | undefined> {
+		return this._extHostLauncher.onDidExit;
+	}
+
+	async reloadWindow(): Promise<void> {
+		this._window.webContents.reload();
+	}
+
 	fireMenuCommand(command: WindowMenuCommand): void {
 		this._onMenuCommand.fire(command);
 	}
@@ -177,14 +206,15 @@ export function sendMenuCommand(command: WindowMenuCommand): void {
 	windowServices.get(window.id)?.fireMenuCommand(command);
 }
 
-export function registerChannels(window: BrowserWindow, server: ChannelServer<IWindowContext>, store: DisposableStore, storage: StorageMainService, fileService: FileService, openedFile: string | null): void {
+export function registerChannels(window: BrowserWindow, server: ChannelServer<IWindowContext>, store: DisposableStore, storage: StorageMainService, fileService: FileService, openedFile: string | null, logService: ILogService): void {
 	server.registerChannel('log', ProxyChannel.fromService<IWindowContext>(new LogChannel(), store));
 	// 10: ONE `file` channel replaces 02's hand-written fileIO channel — the FileService runs in
 	// main (disk provider + watcher) and the renderer gets the proxied wire shape
+	void logService;
 	const fileWire = createFileServiceWire(fileService);
 	store.add(toDisposable(() => fileWire.dispose()));
 	server.registerChannel('file', ProxyChannel.fromService<IWindowContext>(fileWire.service, store));
-	server.registerChannel('window', ProxyChannel.fromService<IWindowContext>(new WindowChannelService(window, store, openedFile), store));
+	server.registerChannel('window', ProxyChannel.fromService<IWindowContext>(new WindowChannelService(window, store, openedFile, logService), store));
 	// storage is app-level (not per window), but it rides the window's channel server
 	server.registerChannel('storage', storage);
 }

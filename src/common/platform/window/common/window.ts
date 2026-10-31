@@ -6,6 +6,8 @@ export interface IWindowInfo {
 	readonly id: number;
 	readonly bounds: { readonly x: number; readonly y: number; readonly width: number; readonly height: number };
 	readonly focused: boolean;
+	/** the app version from package.json (11: `engines.mini-vscode` checks) */
+	readonly appVersion: string;
 }
 
 /** Commands the Electron menu sends to the window's renderer. */
@@ -32,4 +34,13 @@ export interface IWindowChannel {
 	getOpenedFile(): Promise<string | null>;
 	/** the app's userData directory (the environment path the renderer needs for settings etc.) */
 	getUserDataPath(): Promise<string>;
+	// ---- extensions (11)
+	/** main scans the builtin + user extension directories (fs lives in main) */
+	scanExtensions(): Promise<unknown>;
+	/** main forks the utility process and transfers a MessagePort into this renderer */
+	startExtensionHost(): Promise<void>;
+	/** note: the port carries the RPC; this event only reports the process exit */
+	onDidExtensionHostExit: Event<number | undefined>;
+	/** Developer: Reload Window — the workbench terminates the host first, then main reloads */
+	reloadWindow(): Promise<void>;
 }

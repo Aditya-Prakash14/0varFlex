@@ -24,16 +24,19 @@ import {
 	EXT_HOST_CONFIGURATION,
 	EXT_HOST_DOCUMENTS,
 	EXT_HOST_EXTENSION_SERVICE,
+	EXT_HOST_LANGUAGE_FEATURES,
 	IExtensionHostInitData,
 	MAIN_THREAD_COMMANDS,
 	MAIN_THREAD_CONFIGURATION,
 	MAIN_THREAD_DOCUMENTS,
+	MAIN_THREAD_LANGUAGE_FEATURES,
 	MAIN_THREAD_LOG,
 	MAIN_THREAD_MESSAGE,
 	MAIN_THREAD_STATUS_BAR
 } from '../common/platform/extensions/common/extensionHostProtocol.js';
 import type { IExtensionDescription } from '../common/platform/extensions/common/extensions.js';
 import { ExtHostCommands } from './extHostCommands.js';
+import { ExtHostLanguageFeatures } from './extHostLanguageFeatures.js';
 import { installConsoleForwarder } from './extHostConsole.js';
 import { createApiFactory, ICreateApiFactory } from './extHostApi.js';
 import { ExtHostExtensionService } from './extHostExtensionService.js';
@@ -45,6 +48,7 @@ import type {
 	IMainThreadCommands,
 	IMainThreadConfiguration,
 	IMainThreadDocuments,
+	IMainThreadLanguageFeatures,
 	IMainThreadLog,
 	IMainThreadMessage,
 	IMainThreadStatusBar
@@ -98,9 +102,15 @@ function runHost(port: Electron.MessagePortMain): void {
 	const documentsProxy = ProxyChannel.toService<IMainThreadDocuments>(client.getChannel(MAIN_THREAD_DOCUMENTS));
 	const logProxy = ProxyChannel.toService<IMainThreadLog>(client.getChannel(MAIN_THREAD_LOG));
 
+	const languageFeaturesProxy = ProxyChannel.toService<IMainThreadLanguageFeatures>(client.getChannel(MAIN_THREAD_LANGUAGE_FEATURES));
 	const extHostCommands = new ExtHostCommands(commandsProxy);
 	const extHostWindow = new ExtHostWindow(messageProxy, statusBarProxy);
 	const extHostWorkspace = new ExtHostWorkspace(configurationProxy, documentsProxy);
+	const extHostLanguageFeatures = new ExtHostLanguageFeatures(
+		languageFeaturesProxy,
+		message => void logProxy.$log('warn', message).catch(() => { /* renderer gone */ }),
+		{ getDocument: uri => extHostWorkspace.getDocument(uri) }
+	);
 	let apiFactory: ICreateApiFactory | undefined;
 	const extensionsById = new Map<string, IExtensionDescription>();
 	const extensionService = new ExtHostExtensionService(logProxy, (extension) => apiFactory ? apiFactory(extension) : Object.freeze({}));
@@ -122,6 +132,7 @@ function runHost(port: Electron.MessagePortMain): void {
 				commands: extHostCommands,
 				window: extHostWindow,
 				workspace: extHostWorkspace,
+				languages: extHostLanguageFeatures,
 				commandsProxy,
 				env: initData.env
 			});
@@ -134,6 +145,7 @@ function runHost(port: Electron.MessagePortMain): void {
 		},
 		$activateExtension: (identifier: string, reason: string) => extensionService.$activateExtension(identifier, reason),
 		terminate: async (): Promise<void> => {
+			extHostLanguageFeatures.disposeAll();
 			await extensionService.deactivateAll();
 			setTimeout(() => process.exit(0), 0);
 		}
@@ -148,6 +160,14 @@ function runHost(port: Electron.MessagePortMain): void {
 		$acceptChangeDocument: (change: Parameters<IExtHostDocuments['$acceptChangeDocument']>[0]) => extHostWorkspace.$acceptChangeDocument(change as never),
 		$acceptCloseDocument: (uri: Parameters<IExtHostDocuments['$acceptCloseDocument']>[0]) => extHostWorkspace.$acceptCloseDocument(uri),
 		$acceptActiveEditorChange: (editor: Parameters<IExtHostDocuments['$acceptActiveEditorChange']>[0]) => extHostWorkspace.$acceptActiveEditorChange(editor as never)
+	}, new DisposableStore()));
+
+	server.registerChannel(EXT_HOST_LANGUAGE_FEATURES, ProxyChannel.fromService({
+		$provideCompletionItems: (handle: number, requestId: number, uri: { scheme: string; path: string }, position: { line: number; character: number }, context: { triggerKind: number; triggerCharacter?: string }) =>
+			extHostLanguageFeatures.$provideCompletionItems(handle, requestId, uri, position, context),
+		$provideHover: (handle: number, requestId: number, uri: { scheme: string; path: string }, position: { line: number; character: number }) =>
+			extHostLanguageFeatures.$provideHover(handle, requestId, uri, position),
+		$cancelProviderRequest: (handle: number, requestId: number) => extHostLanguageFeatures.$cancelProviderRequest(handle, requestId)
 	}, new DisposableStore()));
 
 	server.registerChannel(EXT_HOST_CONFIGURATION, ProxyChannel.fromService({

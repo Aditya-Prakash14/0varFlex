@@ -43,6 +43,10 @@ export interface IEditorWidgetServices {
 	readonly options: EditorOptionsService;
 	readonly configuration: IConfigurationService;
 	readonly contextKeyService: IContextKeyService;
+	/** 12: the provider SPI (completions/hover) the contribs consult */
+	readonly languageFeatures: import('../../workbench/api/common/mainThreadLanguageFeatures.js').ILanguageFeaturesService;
+	/** 12: markers for decorations + marker tooltips */
+	readonly markers: import('../../workbench/services/markers/browser/markerService.js').MarkerService;
 }
 
 export const BLINK_INTERVAL = 500;
@@ -93,6 +97,10 @@ export class EditorWidget extends Disposable {
 
 	private readonly _onDidRender = this._register(new Emitter<IRenderInfo>());
 	readonly onDidRender: Event<IRenderInfo> = this._onDidRender.event;
+
+	/** 12: the editing operations the contribs react to (real: onDidType / typing notifications) */
+	private readonly _onDidEdit = this._register(new Emitter<{ kind: 'type' | 'delete'; text: string }>());
+	readonly onDidEdit: Event<{ kind: 'type' | 'delete'; text: string }> = this._onDidEdit.event;
 
 	constructor(container: HTMLElement, services: IEditorWidgetServices) {
 		super();
@@ -219,6 +227,39 @@ export class EditorWidget extends Disposable {
 		if (isCompositionCommit) {
 			model.pushStackElement();
 		}
+		this._onDidEdit.fire({ kind: 'type', text });
+	}
+
+	/** 12: a completion accept replaces the provider's range and leaves the cursor after it */
+	replaceRange(range: Range, text: string): void {
+		this._pushEdit(range, text);
+	}
+
+	isComposing(): boolean {
+		return this._editContext.isComposing;
+	}
+
+	getViewModel(): ViewModel {
+		return this._viewModel;
+	}
+
+	/** mouse → text position (the hover dwell needs the same mapping the mouse handler uses) */
+	getPositionAt(clientX: number, clientY: number): Position | null {
+		const model = this._model;
+		if (!model) {
+			return null;
+		}
+		const range = (document as Document & { caretRangeFromPoint?: (x: number, y: number) => Range | null }).caretRangeFromPoint?.(clientX, clientY);
+		if (range) {
+			const found = this._viewLines.columnAtDomRange(range.startContainer, range.startOffset, this._viewModel);
+			if (found) {
+				return new Position(found.lineNumber, Math.min(found.column, model.getLineMaxColumn(found.lineNumber)));
+			}
+		}
+		const rect = this.view.scrollableElement.getBoundingClientRect();
+		const x = clientX - rect.left + this.view.scrollableElement.scrollLeft;
+		const y = clientY - rect.top;
+		return this._viewModel.getViewPositionFromCoordinates(this.view.getScrollTop(), x, y, lineNumber => model.getLineContent(lineNumber));
 	}
 
 	deleteLeft(): void {
@@ -229,6 +270,7 @@ export class EditorWidget extends Disposable {
 		const selection = this._cursorController.getSelection();
 		if (!selection.isEmpty()) {
 			this._pushEdit(selection, '');
+			this._onDidEdit.fire({ kind: 'delete', text: '' });
 			return;
 		}
 		const position = selection.getPosition();
@@ -236,11 +278,13 @@ export class EditorWidget extends Disposable {
 			const lineText = model.getLineContent(position.lineNumber);
 			const start = new Position(position.lineNumber, position.column - prevCharLength(lineText, position.column - 1));
 			this._pushEdit(new Range(start.lineNumber, start.column, position.lineNumber, position.column), '');
+			this._onDidEdit.fire({ kind: 'delete', text: '' });
 			return;
 		}
 		if (position.lineNumber > 1) {
 			const previousLine = position.lineNumber - 1;
 			this._pushEdit(new Range(previousLine, model.getLineMaxColumn(previousLine), position.lineNumber, 1), '');
+			this._onDidEdit.fire({ kind: 'delete', text: '' });
 		}
 	}
 
@@ -270,6 +314,7 @@ export class EditorWidget extends Disposable {
 		const selection = this._cursorController.getSelection();
 		if (!selection.isEmpty()) {
 			this._pushEdit(selection, '');
+			this._onDidEdit.fire({ kind: 'delete', text: '' });
 		}
 	}
 

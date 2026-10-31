@@ -44,6 +44,9 @@ export const EXT_HOST_EXTENSION_SERVICE = 'ExtHostExtensionService';
 export const EXT_HOST_COMMANDS = 'ExtHostCommands';
 export const EXT_HOST_DOCUMENTS = 'ExtHostDocuments';
 export const EXT_HOST_CONFIGURATION = 'ExtHostConfiguration';
+export const EXT_HOST_LANGUAGE_FEATURES = 'ExtHostLanguageFeatures';
+
+export const MAIN_THREAD_LANGUAGE_FEATURES = 'MainThreadLanguageFeatures';
 
 // ---- wire DTOs
 
@@ -115,6 +118,67 @@ export interface IWireConfigValue {
 }
 
 export type IWireMessageSeverity = 'info' | 'warning' | 'error';
+
+// ---- language features (12): completion/hover/diagnostics DTOs
+// (LSP numeric values are used verbatim: CompletionItemKind 1..25, DiagnosticSeverity Error=1..Hint=4)
+
+export interface IWireCompletionItem {
+	readonly label: string;
+	readonly kind?: number;
+	readonly detail?: string;
+	readonly documentation?: string;
+	readonly insertText?: string;
+	readonly filterText?: string;
+	readonly sortText?: string;
+	/** `textEdit`-lite: the range to replace + the new text (the LSP client feeds this directly) */
+	readonly textEdit?: {
+		readonly range: IWireRange;
+		readonly newText: string;
+	};
+}
+
+export interface IWireCompletionList {
+	readonly items: readonly IWireCompletionItem[];
+	readonly isIncomplete: boolean;
+}
+
+export interface IWireCompletionContext {
+	/** CompletionTriggerKind: Invoke = 1, TriggerCharacter = 2, TriggerForIncompleteCompletions = 3 */
+	readonly triggerKind: number;
+	readonly triggerCharacter?: string;
+}
+
+export interface IWireMarkupContent {
+	readonly kind: 'plaintext' | 'markdown';
+	readonly value: string;
+}
+
+export interface IWireHover {
+	readonly contents: readonly IWireMarkupContent[];
+	readonly range?: IWireRange;
+}
+
+export interface IWireDiagnostic {
+	readonly range: IWireRange;
+	/** DiagnosticSeverity: Error = 1, Warning = 2, Information = 3, Hint = 4 */
+	readonly severity: number;
+	readonly message: string;
+	readonly code?: string;
+}
+
+/** CompletionTriggerKind / DiagnosticSeverity live where the LSP draft puts them */
+export const enum CompletionTriggerKind {
+	Invoke = 1,
+	TriggerCharacter = 2,
+	TriggerForIncompleteCompletions = 3
+}
+
+export const enum LspDiagnosticSeverity {
+	Error = 1,
+	Warning = 2,
+	Information = 3,
+	Hint = 4
+}
 
 // ---- conversion helpers (the boundary, in one place)
 

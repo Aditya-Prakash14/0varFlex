@@ -1014,3 +1014,218 @@ body {
 	color: var(--mini-watermark-dim);
 	font-size: 11px;
 }
+
+/* ---- suggest widget (12) ---- */
+
+.suggest-widget {
+	position: absolute;
+	z-index: 40;
+	width: 320px;
+	background: #252526;
+	border: 1px solid #454545;
+	box-shadow: 0 2px 8px rgba(0, 0, 0, 0.36);
+	color: var(--mini-foreground);
+	font-size: 13px;
+	font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+
+.suggest-list {
+	position: relative;
+	overflow-y: auto;
+}
+
+.suggest-row {
+	position: absolute;
+	left: 0;
+	right: 0;
+	height: 22px;
+	display: flex;
+	align-items: center;
+	box-sizing: border-box;
+	padding: 0 6px;
+	white-space: nowrap;
+	overflow: hidden;
+}
+
+.suggest-row.selected {
+	background: #04395e;
+}
+
+.suggest-icon {
+	width: 18px;
+	display: flex;
+	justify-content: center;
+	font-weight: 600;
+}
+
+.suggest-icon.kind-method,
+.suggest-icon.kind-function {
+	color: #b180d7;
+}
+
+.suggest-icon.kind-field,
+.suggest-icon.kind-variable,
+.suggest-icon.kind-property {
+	color: #75beff;
+}
+
+.suggest-icon.kind-class,
+.suggest-icon.kind-interface,
+.suggest-icon.kind-struct,
+.suggest-icon.kind-enum,
+.suggest-icon.kind-type-parameter {
+	color: #ee9d28;
+}
+
+.suggest-icon.kind-keyword {
+	color: #569cd6;
+}
+
+.suggest-icon.kind-constant,
+.suggest-icon.kind-enum-member,
+.suggest-icon.kind-value,
+.suggest-icon.kind-unit {
+	color: #4fc1ff;
+}
+
+.suggest-icon.kind-snippet {
+	color: #a5efac;
+}
+
+.suggest-label {
+	flex: 1;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.suggest-match {
+	font-weight: 700;
+}
+
+.suggest-detail {
+	margin-left: 12px;
+	color: #8b949e;
+	font-size: 11px;
+}
+
+/* ---- hover tooltip (12) ---- */
+
+.editor-hover {
+	position: absolute;
+	z-index: 50;
+	max-width: 420px;
+	background: #252526;
+	border: 1px solid #454545;
+	box-shadow: 0 2px 8px rgba(0, 0, 0, 0.36);
+	padding: 6px 10px;
+	color: var(--mini-foreground);
+	font-size: 13px;
+	font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+
+.editor-hover-content {
+	max-height: 260px;
+	overflow: auto;
+}
+
+.hover-para {
+	margin: 3px 0;
+	white-space: pre-wrap;
+}
+
+.hover-para code {
+	background: rgba(255, 255, 255, 0.08);
+	padding: 0 3px;
+	border-radius: 3px;
+	font-family: Menlo, Monaco, 'Courier New', monospace;
+	font-size: 12px;
+}
+
+.hover-code {
+	background: rgba(255, 255, 255, 0.06);
+	margin: 4px 0;
+	padding: 6px 8px;
+	border-radius: 3px;
+	font-family: Menlo, Monaco, 'Courier New', monospace;
+	font-size: 12px;
+	white-space: pre;
+}
+
+.hover-marker-error {
+	color: #f14c4c;
+}
+
+.hover-marker-warning {
+	color: #cca700;
+}
+
+.hover-marker-info,
+.hover-marker-hint {
+	color: #75beff;
+}
+
+.hover-highlight {
+	background: rgba(255, 255, 255, 0.09);
+}
+
+/* ---- marker decorations (12): squiggles are repeat-x SVG waves, like the real ones ---- */
+
+.editor-marker-squiggles {
+	position: absolute;
+	inset: 0;
+	pointer-events: none;
+}
+
+.marker-squiggle {
+	position: absolute;
+	height: 3px;
+	background-repeat: repeat-x;
+	background-position: bottom left;
+	background-size: 6px 3px;
+}
+
+.marker-squiggle.severity-error {
+	background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='6' height='3'%3E%3Cpath d='M0 2.5 L1.5 1 L3 2.5 L4.5 1 L6 2.5' fill='none' stroke='%23f14c4c'/%3E%3C/svg%3E");
+}
+
+.marker-squiggle.severity-warning {
+	background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='6' height='3'%3E%3Cpath d='M0 2.5 L1.5 1 L3 2.5 L4.5 1 L6 2.5' fill='none' stroke='%23cca700'/%3E%3C/svg%3E");
+}
+
+.marker-squiggle.severity-info {
+	background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='6' height='3'%3E%3Cpath d='M0 2.5 L1.5 1 L3 2.5 L4.5 1 L6 2.5' fill='none' stroke='%233794ff'/%3E%3C/svg%3E");
+}
+
+.marker-squiggle.severity-hint {
+	background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='6' height='3'%3E%3Cpath d='M0 2.5 L1.5 1 L3 2.5 L4.5 1 L6 2.5' fill='none' stroke='%236e7681'/%3E%3C/svg%3E");
+}
+
+.editor-marker-dots {
+	position: absolute;
+	inset: 0;
+	pointer-events: none;
+}
+
+.marker-dot {
+	position: absolute;
+	right: 8px;
+	width: 6px;
+	height: 6px;
+	border-radius: 50%;
+}
+
+.marker-dot.severity-error {
+	background: #f14c4c;
+}
+
+.marker-dot.severity-warning {
+	background: #cca700;
+}
+
+.marker-dot.severity-info {
+	background: #3794ff;
+}
+
+.marker-dot.severity-hint {
+	background: #6e7681;
+}

@@ -5,6 +5,7 @@
 
 import type { IExtensionDescription } from '../common/platform/extensions/common/extensions.js';
 import type { ExtHostCommands } from './extHostCommands.js';
+import type { ExtHostLanguageFeatures } from './extHostLanguageFeatures.js';
 import type { ExtHostWindow } from './extHostWindow.js';
 import type { ExtHostWorkspace } from './extHostWorkspace.js';
 import type { IMainThreadCommands } from './mainThreadTypes.js';
@@ -13,6 +14,7 @@ import {
 	Disposable,
 	EventEmitter,
 	ExtensionMode,
+	MarkdownString,
 	Position,
 	Range,
 	Selection,
@@ -23,6 +25,7 @@ import {
 
 export interface IExtHostApiServices {
 	readonly commands: ExtHostCommands;
+	readonly languages: ExtHostLanguageFeatures;
 	readonly window: ExtHostWindow;
 	readonly workspace: ExtHostWorkspace;
 	readonly commandsProxy: IMainThreadCommands;
@@ -102,6 +105,20 @@ export function createApiFactory(services: IExtHostApiServices): ICreateApiFacto
 				}
 			},
 
+			languages: {
+				registerCompletionItemProvider(selector: { language?: string } | string, provider: unknown, ...triggerCharacters: unknown[]): Disposable {
+					const normalized = typeof selector === 'string' ? { language: selector } : selector;
+					return services.languages.registerCompletionItemProvider(extension, normalized, provider as never, triggerCharacters.map(character => String(character)));
+				},
+				registerHoverProvider(selector: { language?: string } | string, provider: unknown): Disposable {
+					const normalized = typeof selector === 'string' ? { language: selector } : selector;
+					return services.languages.registerHoverProvider(extension, normalized, provider as never);
+				},
+				createDiagnosticCollection(name?: string): unknown {
+					return services.languages.createDiagnosticCollection(extension, name ?? extension.name);
+				}
+			},
+
 			env: {
 				appName: services.env.appName,
 				appVersion: services.env.appVersion,
@@ -115,6 +132,7 @@ export function createApiFactory(services: IExtHostApiServices): ICreateApiFacto
 			Selection,
 			Disposable,
 			EventEmitter,
+			MarkdownString,
 			StatusBarAlignment,
 			ConfigurationTarget,
 			ViewColumn,

@@ -1,0 +1,31 @@
+{
+	"name": "toy-lang",
+	"publisher": "mini",
+	"version": "1.0.0",
+	"engines": {
+		"mini-vscode": "^0.0.1"
+	},
+	"main": "./out/extension.js",
+	"activationEvents": [
+		"onLanguage:toycfg"
+	],
+	"contributes": {
+		"languages": [
+			{
+				"id": "toycfg",
+				"aliases": ["Toy Config"],
+				"extensions": ["cfg"]
+			}
+		],
+		"configuration": {
+			"title": "Toy Language",
+			"properties": {
+				"toyLang.maxNumberOfProblems": {
+					"type": "number",
+					"default": 100,
+					"description": "Controls the maximum number of problems produced by the toy language server."
+				}
+			}
+		}
+	}
+}

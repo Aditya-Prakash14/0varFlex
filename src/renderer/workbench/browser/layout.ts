@@ -16,6 +16,8 @@ import { IConfigurationService } from '../../../common/platform/configuration/co
 import { IStorageService, StorageScope } from '../../../common/platform/storage/common/storage.js';
 import { EditorOptionsService } from '../../editor/browser/config.js';
 import { CodeEditorService } from '../services/editor/browser/codeEditorService.js';
+import type { LanguageFeaturesService } from '../api/common/mainThreadLanguageFeatures.js';
+import type { MarkerService } from '../services/markers/browser/markerService.js';
 import { PanelVisibleContext, SidebarVisibleContext } from '../contrib/layout/common/layoutContextKeys.js';
 import { Part } from './part.js';
 import { TitlebarPart } from './parts/titlebar/titlebarPart.js';
@@ -43,6 +45,8 @@ export interface IWorkbenchLayoutServices {
 	readonly commandService: ICommandService;
 	readonly editorOptions: EditorOptionsService;
 	readonly codeEditorService: CodeEditorService;
+	readonly languageFeatures: LanguageFeaturesService;
+	readonly markerService: MarkerService;
 }
 
 /** Adapts a Part to an IView of a SplitView. Hidden parts can hold no space (min and max 0). */
@@ -167,7 +171,9 @@ export class WorkbenchLayout extends Disposable {
 			configuration: _services.configuration,
 			contextKeyService: _services.contextKeyService,
 			codeEditorService: _services.codeEditorService,
-			commandService: _services.commandService
+			commandService: _services.commandService,
+			languageFeatures: _services.languageFeatures,
+			markers: _services.markerService
 		}));
 		this.editor.create(editorContainer);
 		this._vSplit.addView(new PartView(editorContainer, this.editor, Orientation.VERTICAL), 0);

@@ -153,6 +153,26 @@ export class Selection extends Range {
 	}
 }
 
+export class MarkdownString {
+
+	constructor(public value: string = '') { }
+
+	appendText(value: string): MarkdownString {
+		this.value += value;
+		return this;
+	}
+
+	appendMarkdown(value: string): MarkdownString {
+		this.value += value;
+		return this;
+	}
+
+	appendCodeblock(value: string, language: string = ''): MarkdownString {
+		this.value += `\n\`\`\`${language}\n${value}\n\`\`\`\n`;
+		return this;
+	}
+}
+
 export enum StatusBarAlignment {
 	Left = 1,
 	Right = 2

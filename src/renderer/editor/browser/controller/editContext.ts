@@ -41,6 +41,11 @@ export class EditContext extends Disposable {
 	readonly textarea: HTMLTextAreaElement;
 
 	private _isComposing = false;
+
+	/** 12: the suggest controller suppresses fetches during composition (real: isComposing) */
+	get isComposing(): boolean {
+		return this._isComposing;
+	}
 	/** the last composition commit: the OS fires a trailing `input` carrying the same text */
 	private _pendingCompositionText: string | null = null;
 

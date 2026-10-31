@@ -17,6 +17,8 @@ import { addDisposableListener } from './base/browser/dom.js';
 import { EditorOptionsService } from './editor/browser/config.js';
 import { Selection } from './editor/browser/core/selection.js';
 import { registerEditorCommands } from './editor/browser/editorWidget.js';
+import { registerHoverCommands, hoverControllerFor } from './editor/contrib/hover/hoverController.js';
+import { registerSuggestCommands, suggestControllerFor } from './editor/contrib/suggest/suggestController.js';
 import { TextEditorInput } from './workbench/common/editor/textEditorInput.js';
 import { CommandMetadata, CommandsRegistry, ICommandService } from './platform/commands/common/commands.js';
 import { ContextKeyExpr, RawContextKey } from './platform/contextkey/common/contextkey.js';
@@ -31,6 +33,7 @@ import { QuickInputController } from './platform/quickinput/browser/quickInput.j
 import { Workbench } from './workbench/browser/workbench.js';
 import { StatusbarAlignment } from './workbench/browser/parts/statusbar/statusbarPart.js';
 import { registerEditorActions } from './workbench/browser/parts/editor/editorActions.js';
+import { registerProblemsView } from './workbench/contrib/problems/browser/problemsView.js';
 import { TextEditorPane } from './workbench/browser/parts/editor/editorPanes.js';
 import { registerConfigurationActions } from './workbench/contrib/configuration/browser/configurationActions.js';
 import { registerDefaultConfigurations } from './workbench/contrib/configuration/browser/defaultSettings.js';
@@ -45,6 +48,8 @@ import { ExtensionHostManager } from './workbench/services/extensions/extensionH
 import { registerAllMainThreadServices, snapshotConfiguration, WorkbenchDocuments } from './workbench/services/extensions/mainThreadServices.js';
 import { registerExtensionContributions } from './workbench/services/extensions/extensionRegistries.js';
 import { LanguageService } from './workbench/services/languages/common/languageService.js';
+import { MarkerService } from './workbench/services/markers/browser/markerService.js';
+import { LanguageFeaturesService } from './workbench/api/common/mainThreadLanguageFeatures.js';
 import { NotificationService } from './workbench/services/notifications/browser/notificationService.js';
 import { registerLayoutCommands, SHOW_ALL_COMMANDS_ID } from './workbench/contrib/layout/browser/layoutActions.js';
 import { CommandService } from './workbench/services/commands/common/commandService.js';
@@ -175,6 +180,8 @@ async function main(): Promise<void> {
 	// ---- the workbench (exercise 03); 09 adds the editor services it consumes
 	const editorOptions = new EditorOptionsService(configurationService);
 	const codeEditorService = new CodeEditorService();
+	const markerService = new MarkerService();
+	const languageFeatures = new LanguageFeaturesService();
 	const workbench = new Workbench(document.body, {
 		logService,
 		storage,
@@ -183,7 +190,9 @@ async function main(): Promise<void> {
 		commandService,
 		windowChannel,
 		editorOptions,
-		codeEditorService
+		codeEditorService,
+		languageFeatures,
+		markerService
 	});
 	await workbench.start();
 
@@ -285,7 +294,9 @@ async function main(): Promise<void> {
 		options: editorOptions,
 		configuration: configurationService,
 		contextKeyService,
-		codeEditorService
+		codeEditorService,
+		languageFeatures,
+		markers: markerService
 	});
 	workbench.layout.editor.onDidRequestCloseEditor(({ input, group }) => {
 		void editorService.closeEditor(input, group);
@@ -300,6 +311,15 @@ async function main(): Promise<void> {
 	registerEditorActions(editorService, workbench.layout.editor, fileService, userDataPath);
 	registerConfigurationActions(configurationService.getSettingsPath(), fsPath => {
 		void editorService.openEditor({ resource: URI.file(fsPath) });
+	});
+	// 12: the language contrib commands resolve the ACTIVE editor's controllers (like 09's pattern)
+	registerSuggestCommands(() => suggestControllerFor(getActiveWidget()));
+	registerHoverCommands(() => hoverControllerFor(getActiveWidget()));
+	registerProblemsView({
+		markers: markerService,
+		quickInput,
+		editorService,
+		statusbar: workbench.layout.statusbar
 	});
 	keybindingService.rebuild();
 
@@ -457,6 +477,8 @@ async function main(): Promise<void> {
 
 	// ---- the extension system (exercise 11): scan → contributions → the host process
 	const languageService = new LanguageService(logService);
+	// 12: the provider registry resolves resource → languageId through 11's LanguageService
+	languageFeatures.setLanguageIdResolver(resource => languageService.languageIdForResource(resource));
 	const notifications = new NotificationService();
 	const extensionService = new ExtensionService(logService);
 	const mainThreadServiceHost = {
@@ -469,6 +491,8 @@ async function main(): Promise<void> {
 		codeEditorService,
 		editorService,
 		editorPart: workbench.layout.editor,
+		languageFeatures,
+		markers: markerService,
 		getExtensionService: () => extensionService
 	};
 	const documentMirror = new WorkbenchDocuments(mainThreadServiceHost);
@@ -679,6 +703,18 @@ async function main(): Promise<void> {
 		},
 		editor: devEditor,
 		editors: devEditors,
+		language: {
+			/** 12: the acceptance reads markers through here (owner-isolated round trip) */
+			getMarkers: () => markerService.read().map(marker => ({
+				owner: marker.owner,
+				severity: marker.severity,
+				message: marker.message,
+				resource: marker.resource.toString(),
+				line: marker.range.startLineNumber,
+				column: marker.range.startColumn
+			})),
+			readHost: (method: string, args: unknown[]) => hostManager.callHostService('ExtHostLanguageFeatures', method, args)
+		},
 		extensions: {
 			getScanSummary: () => ({
 				found: scanResult.extensions.length,

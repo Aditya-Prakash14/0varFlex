@@ -37,6 +37,16 @@ export interface IMainThreadDocuments {
 	$getActiveEditor(): Promise<IWireActiveEditor | null>;
 }
 
+import type { IWireCompletionList, IWireHover, IWireRange } from '../common/platform/extensions/common/extensionHostProtocol.js';
+
+export interface IMainThreadLanguageFeatures {
+	$registerCompletionProvider(handle: number, language: string, triggerCharacters?: readonly string[]): Promise<void>;
+	$registerHoverProvider(handle: number, language: string): Promise<void>;
+	$unregisterProvider(handle: number): Promise<void>;
+	/** the diagnostics push: owner = the collection name; empty entries clear everything */
+	$changeDiagnostics(owner: string, entries: readonly { uri: { scheme: string; path: string }; markers: readonly { range: IWireRange; severity: number; message: string; code?: string }[] }[]): Promise<void>;
+}
+
 export interface IMainThreadLog {
 	$log(level: 'trace' | 'info' | 'warn' | 'error', message: string, extensionId?: string): Promise<void>;
 }

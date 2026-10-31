@@ -12,6 +12,9 @@ import { TextModel } from '../../../../../common/editor/common/model/textModel.j
 import { append, $ } from '../../../../base/browser/dom.js';
 import { Selection } from '../../../../editor/browser/core/selection.js';
 import { EditorWidget, IEditorWidgetServices } from '../../../../editor/browser/editorWidget.js';
+import { HoverController } from '../../../../editor/contrib/hover/hoverController.js';
+import { MarkerDecorations } from '../../../../editor/contrib/markerDecorations/markerDecorations.js';
+import { SuggestController } from '../../../../editor/contrib/suggest/suggestController.js';
 import { EditorPane, IEditorViewState } from '../../../common/editor/editorPane.js';
 import { EditorInput } from '../../../common/editor/editorInput.js';
 import { TextEditorInput } from '../../../common/editor/textEditorInput.js';
@@ -37,6 +40,10 @@ export class TextEditorPane extends EditorPane {
 		this.element = $('.editor-pane');
 		this._widget = this._register(new EditorWidget(this.element, _services));
 		this._widget.setModel(model);
+		// 12: the language contribs, one set per pane (they resolve their resource through the input)
+		this._register(new SuggestController(this._widget, _services, () => input.resource));
+		this._register(new HoverController(this._widget, _services, () => input.resource));
+		this._register(new MarkerDecorations(this._widget, _services.markers, () => input.resource));
 		// showing the model keeps it alive; closing the pane releases it (refcount in the registry)
 		this._services.codeEditorService.acquire(input.resource);
 	}
@@ -119,9 +126,11 @@ export class TextEditorPane extends EditorPane {
 		});
 	}
 
-	/** applied when the editor service opens with a selection */
-	applySelection(selection: { lineNumber: number; column: number }): void {
-		this._widget.setSelection(new Selection(selection.lineNumber, selection.column, selection.lineNumber, selection.column));
+	/** applied when the editor service opens with a selection (12: may be a full range) */
+	applySelection(selection: { lineNumber: number; column: number; endLineNumber?: number; endColumn?: number }): void {
+		const endLine = selection.endLineNumber ?? selection.lineNumber;
+		const endColumn = selection.endColumn ?? selection.column;
+		this._widget.setSelection(new Selection(selection.lineNumber, selection.column, endLine, endColumn));
 		this._widget.revealPosition(new Position(selection.lineNumber, selection.column), 'center');
 	}
 

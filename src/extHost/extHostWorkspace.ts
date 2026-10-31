@@ -103,6 +103,11 @@ export class ExtHostWorkspace {
 		return this._activeEditor;
 	}
 
+	/** the provider calls resolve the wire uri to the mirrored document */
+	getDocument(uri: { scheme: string; path: string }): ExtHostDocumentData | undefined {
+		return this._documents.get(`${uri.scheme}://${uri.path}`);
+	}
+
 	// ---- the reinitialize sequence: seed from the renderer's current state
 
 	async initialize(): Promise<void> {

@@ -11,6 +11,8 @@ import type { IConfigurationService } from '../../../../common/platform/configur
 import {
 	EXT_HOST_CONFIGURATION,
 	EXT_HOST_DOCUMENTS,
+	EXT_HOST_LANGUAGE_FEATURES,
+	MAIN_THREAD_LANGUAGE_FEATURES,
 	IWireActiveEditor,
 	IWireRange,
 	IWireTextDocument,
@@ -35,6 +37,10 @@ import type { TextModel } from '../../../../common/editor/common/model/textModel
 import { URI } from '../../../../common/base/common/uri.js';
 import type { ExtensionService } from './extensionService.js';
 import { ExtensionHostManager } from './extensionHostManager.js';
+import { createMainThreadLanguageFeatures } from '../../api/common/mainThreadLanguageFeatures.js';
+import type { LanguageFeaturesService } from '../../api/common/mainThreadLanguageFeatures.js';
+import type { MarkerService } from '../markers/browser/markerService.js';
+import { ConfigurationRegistry } from '../../../../common/platform/configuration/common/configurationRegistry.js';
 
 export interface IMainThreadServices {
 	readonly logService: ILogService;
@@ -46,6 +52,8 @@ export interface IMainThreadServices {
 	readonly codeEditorService: CodeEditorService;
 	readonly editorService: EditorService;
 	readonly editorPart: EditorPart;
+	readonly languageFeatures: LanguageFeaturesService;
+	readonly markers: MarkerService;
 	/** late-bound to break the construction cycle with the extension service */
 	readonly getExtensionService: () => ExtensionService;
 }
@@ -223,6 +231,15 @@ export function registerAllMainThreadServices(server: ChannelServer<string>, ser
 		$getActiveEditor: async () => documents.activeEditor
 	}, new DisposableStore()));
 
+	// ---- MainThreadLanguageFeatures: provider registrations + the diagnostics push
+	const languageFeatureHost = createMainThreadLanguageFeatures(
+		services.languageFeatures,
+		services.markers,
+		(method, args) => host.callHostService(EXT_HOST_LANGUAGE_FEATURES, method, args),
+		services.logService
+	);
+	server.registerChannel(MAIN_THREAD_LANGUAGE_FEATURES, ProxyChannel.fromService(languageFeatureHost.service, new DisposableStore()));
+
 	server.registerChannel(MAIN_THREAD_LOG, ProxyChannel.fromService({
 		$log: async (level: 'trace' | 'info' | 'warn' | 'error', message: string, extensionId?: string) => {
 			const prefixed = extensionId ? `[${extensionId}] ${message}` : `[extension host] ${message}`;
@@ -254,16 +271,12 @@ export function registerAllMainThreadServices(server: ChannelServer<string>, ser
 }
 
 /** the flattened snapshot the host mirrors (NESTED like the reference's initializeConfiguration
- * — a flat dotted key would not be found by `workspace.getConfiguration('section').get('key')`) */
+ * — a flat dotted key would not be found by `workspace.getConfiguration('section').get('key')`).
+ * The source is the configuration REGISTRY, not a hardcoded list: extension-contributed
+ * settings (11 registers `contributes.configuration`) must reach the host too. */
 export function snapshotConfiguration(configurationService: IConfigurationService): { [key: string]: unknown } {
 	const result: { [key: string]: unknown } = {};
-	// the documented settings are the enumerable surface (the registry knows the same keys)
-	const knownKeys = [
-		'editor.fontSize', 'editor.tabSize', 'editor.lineNumbers', 'workbench.sideBar.visible',
-		'workbench.panel.visible', 'workbench.colorTheme', 'explorer.confirmDelete',
-		'wordcount.includeWhitespace'
-	];
-	for (const key of knownKeys) {
+	for (const key of ConfigurationRegistry.getConfigurationProperties().keys()) {
 		const value = configurationService.getValue(key);
 		if (value === undefined) {
 			continue;

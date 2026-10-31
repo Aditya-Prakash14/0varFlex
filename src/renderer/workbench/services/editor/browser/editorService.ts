@@ -27,8 +27,8 @@ export interface IResourceEditorOpenOptions {
 	readonly input?: EditorInput;
 	readonly resource?: URI;
 	readonly options?: {
-		/** applied to the widget after activation (A1's "open at position" seed) */
-		readonly selection?: { readonly lineNumber: number; readonly column: number };
+		/** applied to the widget after activation (A1's "open at position" seed; 12 selects a range) */
+		readonly selection?: { readonly lineNumber: number; readonly column: number; readonly endLineNumber?: number; readonly endColumn?: number };
 		readonly focus?: boolean;
 	};
 }
@@ -110,7 +110,7 @@ export class EditorService extends Disposable {
 		if (opened && open.options?.selection) {
 			const pane = target.activePane;
 			if (pane && 'applySelection' in pane) {
-				(pane as { applySelection(selection: { lineNumber: number; column: number }): void }).applySelection(open.options.selection);
+				(pane as { applySelection(selection: { lineNumber: number; column: number; endLineNumber?: number; endColumn?: number }): void }).applySelection(open.options.selection);
 			}
 		}
 		if (opened) {

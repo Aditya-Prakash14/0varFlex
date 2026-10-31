@@ -1,8 +1,8 @@
-// site/main.js — the motion + interaction layer.
+// site/main.js — interactions + the GSAP layer.
 //
-// Everything is progressive: initial hidden states are applied by this file (never by load-order
-// CSS alone), GSAP is optional, and prefers-reduced-motion gets the finished layout immediately.
-// If the GSAP CDN never answers, `.no-anim` un-hides the page and the site stays whole.
+// Progressive by construction: hidden states are applied here (never by CSS alone), GSAP is
+// optional, prefers-reduced-motion renders the finished page, and a watchdog un-hides everything
+// if motion never starts. Every interaction (nav, menu, copy) works without GSAP at all.
 
 (() => {
 	'use strict';
@@ -19,18 +19,15 @@
 	} else {
 		revealEverything();
 	}
-	// belt and braces: if motion never actually started (threw, stalled, blocked), show the page
 	window.setTimeout(() => { if (!motionStarted) { revealEverything(); } }, 3500);
 
 	/* ---- interactions (no GSAP required) ---------------------------------- */
 
-	// sticky nav state
 	const nav = document.querySelector('.nav');
 	const onScroll = () => nav && nav.classList.toggle('is-scrolled', window.scrollY > 8);
 	onScroll();
 	window.addEventListener('scroll', onScroll, { passive: true });
 
-	// mobile menu
 	const toggle = document.querySelector('.nav-toggle');
 	if (toggle && nav) {
 		const setOpen = open => {
@@ -43,7 +40,6 @@
 		window.addEventListener('keydown', event => { if (event.key === 'Escape') { setOpen(false); } });
 	}
 
-	// copy buttons
 	document.querySelectorAll('[data-copy]').forEach(button => {
 		button.addEventListener('click', async () => {
 			const source = document.querySelector(button.getAttribute('data-copy'));
@@ -70,7 +66,29 @@
 		});
 	});
 
-	// the year, so nobody has to think about it again
+	// card spotlights (CSS variables, pointer only)
+	if (window.matchMedia('(hover: hover) and (pointer: fine)').matches) {
+		document.querySelectorAll('.card').forEach(card => {
+			card.addEventListener('pointermove', event => {
+				const bounds = card.getBoundingClientRect();
+				card.style.setProperty('--mx', `${event.clientX - bounds.left}px`);
+				card.style.setProperty('--my', `${event.clientY - bounds.top}px`);
+			});
+		});
+	}
+
+	// the section rail highlights what is on screen
+	if ('IntersectionObserver' in window) {
+		const railLinks = new Map([...document.querySelectorAll('[data-rail]')].map(link => [link.getAttribute('data-rail'), link]));
+		const observer = new IntersectionObserver(entries => {
+			entries.filter(entry => entry.isIntersecting).forEach(entry => {
+				railLinks.forEach(link => link.classList.remove('is-active'));
+				railLinks.get(entry.target.id)?.classList.add('is-active');
+			});
+		}, { rootMargin: '-45% 0px -45% 0px' });
+		railLinks.forEach((_, id) => { const section = document.getElementById(id); if (section) { observer.observe(section); } });
+	}
+
 	document.querySelectorAll('[data-year]').forEach(node => { node.textContent = String(new Date().getFullYear()); });
 
 	if (!gsap || !ScrollTrigger || reduce) {
@@ -88,78 +106,31 @@
 		revealEverything();
 	}
 
-	/** wraps each visual line of a heading so lines can slide up from behind a mask */
-	function splitLines(element) {
-		const words = element.innerHTML.trim().split(/\s+/);
-		element.innerHTML = '';
-		const probes = words.map((word, index) => {
-			const span = document.createElement('span');
-			span.style.display = 'inline-block';
-			span.innerHTML = word;
-			element.appendChild(span);
-			if (index < words.length - 1) { element.appendChild(document.createTextNode(' ')); }
-			return span;
-		});
-		const lines = [];
-		let top = null;
-		let current = [];
-		probes.forEach(span => {
-			if (top === null || Math.abs(span.offsetTop - top) < 4) {
-				current.push(span);
-				top = span.offsetTop;
-			} else {
-				lines.push(current);
-				current = [span];
-				top = span.offsetTop;
-			}
-		});
-		if (current.length) { lines.push(current); }
-
-		element.innerHTML = '';
-		const lineNodes = lines.map(lineWords => {
-			const line = document.createElement('span');
-			line.style.display = 'block';
-			lineWords.forEach((word, index) => {
-				const span = document.createElement('span');
-				span.style.display = 'inline-block';
-				span.innerHTML = word.innerHTML;
-				line.appendChild(span);
-				if (index < lineWords.length - 1) { line.appendChild(document.createTextNode(' ')); }
-			});
-			element.appendChild(line);
-			return line;
-		});
-		return { lines: lineNodes, words: element.querySelectorAll('span > span') };
-	}
-
 	function initMotion(gsap, ScrollTrigger) {
-
 		const canHover = window.matchMedia('(hover: hover) and (pointer: fine)').matches;
 
-		/* hero ----------------------------------------------------------------- */
+		/* scroll progress hairline ---------------------------------------------- */
+		gsap.to('.progress i', { scaleX: 1, ease: 'none', scrollTrigger: { start: 0, end: 'max', scrub: 0.3 } });
 
-		const splitEl = document.querySelector('[data-split]');
-		const split = splitEl ? splitLines(splitEl) : null;
+		/* hero ------------------------------------------------------------------- */
 		const heroTargets = gsap.utils.toArray('[data-hero]');
-		gsap.set(heroTargets, { opacity: 0, y: 20 });
-		if (split) {
-			gsap.set(split.lines, { overflow: 'hidden', display: 'block' });
-			gsap.set(split.words, { yPercent: 112 });
-			gsap.set(splitEl, { y: 0 }); // the words carry the motion, the block only fades
-		}
+		gsap.set(heroTargets, { opacity: 0, y: 22 });
+		const words = gsap.utils.toArray('.h-word');
+		gsap.set(words, { yPercent: 114 });
 
 		const intro = gsap.timeline({ defaults: { ease: 'power3.out' }, delay: 0.1 });
 		intro
-			.fromTo('.nav', { opacity: 0, y: -14 }, { opacity: 1, y: 0, duration: 0.7, clearProps: 'opacity,transform' })
-			.to('[data-hero="1"]', { opacity: 1, y: 0, duration: 0.6 }, 0.1)
-			.to(split ? split.words : splitEl, { yPercent: 0, duration: 0.95, stagger: 0.04 }, 0.2)
-			.to(splitEl, { opacity: 1, duration: 0.01 }, 0.2)
-			.to('[data-hero="3"]', { opacity: 1, y: 0, duration: 0.7 }, 0.42)
-			.to('[data-hero="4"]', { opacity: 1, y: 0, duration: 0.7 }, 0.54)
-			.to('[data-hero="5"]', { opacity: 1, y: 0, duration: 0.7 }, 0.64)
-			.to('[data-hero="6"]', { opacity: 1, y: 0, duration: 0.95 }, 0.32);
+			.fromTo('.nav', { opacity: 0, y: -16 }, { opacity: 1, y: 0, duration: 0.7, clearProps: 'opacity,transform' })
+			.fromTo('.rail', { opacity: 0 }, { opacity: 1, duration: 0.8 }, 0.2)
+			.to('[data-hero="1"]', { opacity: 1, y: 0, duration: 0.6 }, 0.15)
+			.to(words, { yPercent: 0, duration: 1.05, stagger: 0.09 }, 0.22)
+			.to('[data-hero="2"]', { opacity: 1, duration: 0.01 }, 0.22)
+			.to('[data-hero="3"]', { opacity: 1, y: 0, duration: 0.7 }, 0.52)
+			.to('[data-hero="4"]', { opacity: 1, y: 0, duration: 0.7 }, 0.64)
+			.to('[data-hero="5"]', { opacity: 1, y: 0, duration: 0.7 }, 0.74)
+			.to('[data-hero="6"]', { opacity: 1, y: 0, duration: 1.0 }, 0.4);
 
-		// the mini terminal types itself once the window has landed
+		// the mini terminal types itself
 		const typed = document.querySelector('[data-typed]');
 		const typedOut = document.querySelector('[data-typed-out]');
 		const typedCaret = document.querySelector('.window-panel .caret');
@@ -171,103 +142,141 @@
 			intro.call(() => {
 				const state = { i: 0 };
 				gsap.to(state, {
-					i: command.length,
-					duration: 1.05,
-					ease: 'none',
+					i: command.length, duration: 1.0, ease: 'none',
 					onUpdate: () => { typed.textContent = command.slice(0, Math.round(state.i)); },
 					onComplete: () => {
 						gsap.to(typedOut, { opacity: 1, duration: 0.35 });
 						if (typedCaret) { gsap.to(typedCaret, { opacity: 0.999, duration: 0.2 }); }
 					}
 				});
-			}, null, 1.1);
+			}, null, 1.2);
 		}
 
-		// hero parallax: the window drifts slower than the copy
 		if (canHover) {
+			// the window drifts slower than the copy
 			gsap.to('[data-parallax]', {
-				yPercent: 9,
-				ease: 'none',
+				yPercent: 8, ease: 'none',
 				scrollTrigger: { trigger: '.hero', start: 'top top', end: 'bottom top', scrub: true }
 			});
-		}
 
-		// pointer glow in the hero
-		const glow = document.querySelector('.cursor-glow');
-		const hero = document.querySelector('.hero');
-		if (glow && hero && canHover) {
-			const moveX = gsap.quickTo(glow, 'left', { duration: 0.55, ease: 'power3' });
-			const moveY = gsap.quickTo(glow, 'top', { duration: 0.55, ease: 'power3' });
-			hero.addEventListener('pointermove', event => {
-				const bounds = hero.getBoundingClientRect();
-				glow.style.opacity = '1';
-				moveX(event.clientX - bounds.left);
-				moveY(event.clientY - bounds.top);
-			});
-			hero.addEventListener('pointerleave', () => { glow.style.opacity = '0'; });
-		}
+			// a pointer-driven tilt on the window
+			const tilt = document.querySelector('[data-tilt]');
+			if (tilt) {
+				const rotX = gsap.quickTo(tilt, 'rotationX', { duration: 0.7, ease: 'power3' });
+				const rotY = gsap.quickTo(tilt, 'rotationY', { duration: 0.7, ease: 'power3' });
+				document.querySelector('.hero')?.addEventListener('pointermove', event => {
+					const nx = (event.clientX / window.innerWidth - 0.5) * 2;
+					const ny = (event.clientY / window.innerHeight - 0.5) * 2;
+					rotY(nx * 6);
+					rotX(-ny * 4);
+				});
+				document.querySelector('.hero')?.addEventListener('pointerleave', () => { rotX(0); rotY(0); });
+			}
 
-		// magnetic buttons (transform is owned by GSAP: the CSS never transitions transform)
-		if (canHover) {
+			// the pointer glow
+			const glow = document.querySelector('.cursor-glow');
+			const hero = document.querySelector('.hero');
+			if (glow && hero) {
+				const moveX = gsap.quickTo(glow, 'left', { duration: 0.6, ease: 'power3' });
+				const moveY = gsap.quickTo(glow, 'top', { duration: 0.6, ease: 'power3' });
+				hero.addEventListener('pointermove', event => {
+					const bounds = hero.getBoundingClientRect();
+					glow.style.opacity = '1';
+					moveX(event.clientX - bounds.left);
+					moveY(event.clientY - bounds.top);
+				});
+				hero.addEventListener('pointerleave', () => { glow.style.opacity = '0'; });
+			}
+
+			// magnetic buttons
 			document.querySelectorAll('.btn').forEach(button => {
 				const xTo = gsap.quickTo(button, 'x', { duration: 0.4, ease: 'power3' });
 				const yTo = gsap.quickTo(button, 'y', { duration: 0.4, ease: 'power3' });
 				button.addEventListener('pointermove', event => {
 					const bounds = button.getBoundingClientRect();
-					xTo((event.clientX - bounds.left - bounds.width / 2) * 0.18);
-					yTo((event.clientY - bounds.top - bounds.height / 2) * 0.28);
+					xTo((event.clientX - bounds.left - bounds.width / 2) * 0.16);
+					yTo((event.clientY - bounds.top - bounds.height / 2) * 0.26);
 				});
 				button.addEventListener('pointerleave', () => { xTo(0); yTo(0); });
 			});
 		}
 
-		/* marquee -------------------------------------------------------------- */
-
-		const track = document.querySelector('[data-marquee]');
-		if (track) {
+		/* ticker: two tracks, opposite directions --------------------------------- */
+		gsap.utils.toArray('[data-ticker]').forEach(track => {
 			const clone = track.cloneNode(true);
 			clone.setAttribute('aria-hidden', 'true');
 			track.parentElement.appendChild(clone);
 			track.parentElement.style.display = 'flex';
 			gsap.set([track, clone], { flex: 'none' });
-			gsap.to([track, clone], { xPercent: -100, ease: 'none', duration: 40, repeat: -1 });
-		}
+			const direction = track.getAttribute('data-dir') === '-1' ? -1 : 1;
+			gsap.fromTo([track, clone], { xPercent: direction > 0 ? 0 : -100 }, {
+				xPercent: direction > 0 ? -100 : 0, ease: 'none', duration: 34, repeat: -1
+			});
+		});
 
-		/* scroll reveals -------------------------------------------------------- */
+		/* counters ------------------------------------------------------------------ */
+		gsap.utils.toArray('[data-count]').forEach(node => {
+			const value = Number(node.getAttribute('data-count'));
+			const state = { value: 0 };
+			gsap.to(state, {
+				value, duration: 1.5, ease: 'power2.out',
+				scrollTrigger: { trigger: node, start: 'top 92%' },
+				onUpdate: () => { node.textContent = String(Math.round(state.value)); }
+			});
+		});
 
+		/* capabilities: pinned horizontal rail (desktop only) ------------------------ */
+		const media = gsap.matchMedia();
+		media.add('(min-width: 901px)', () => {
+			const section = document.querySelector('.horizon');
+			const track = document.querySelector('[data-horizon]');
+			const bar = document.querySelector('[data-horizon-progress]');
+			if (!section || !track) { return; }
+			const distance = () => Math.max(0, track.scrollWidth - document.documentElement.clientWidth);
+			const tween = gsap.to(track, {
+				x: () => -distance(),
+				ease: 'none',
+				scrollTrigger: {
+					trigger: section,
+					start: 'top top',
+					end: () => '+=' + distance(),
+					pin: true,
+					scrub: 1,
+					anticipatePin: 1,
+					invalidateOnRefresh: true,
+					onUpdate: self => { if (bar) { bar.style.transform = `scaleX(${self.progress})`; } }
+				}
+			});
+			return () => tween.scrollTrigger?.kill();
+		});
+
+		/* sessions: the stack settles as the next card covers it ---------------------- */
+		const cards = gsap.utils.toArray('[data-stack-card]');
+		cards.forEach((card, index) => {
+			gsap.set(card, { transformOrigin: 'center top' });
+			if (index === cards.length - 1) { return; }
+			gsap.to(card, {
+				scale: 0.94, opacity: 0.5, ease: 'none',
+				scrollTrigger: { trigger: cards[index + 1], start: 'top bottom', end: 'top 30%', scrub: true }
+			});
+		});
+
+		/* scroll reveals (everything outside the pinned/stacked regions) --------------- */
 		gsap.utils.toArray('[data-reveal]').forEach((element, index) => {
-			gsap.fromTo(element, { opacity: 0, y: 26 }, {
-				opacity: 1,
-				y: 0,
-				duration: 0.85,
-				ease: 'power3.out',
-				delay: (index % 3) * 0.06,
+			gsap.fromTo(element, { opacity: 0, y: 28 }, {
+				opacity: 1, y: 0, duration: 0.9, ease: 'power3.out',
+				delay: (index % 3) * 0.05,
 				scrollTrigger: { trigger: element, start: 'top 88%' },
 				onComplete: () => gsap.set(element, { clearProps: 'transform' })
 			});
 		});
 
-		// counters
-		gsap.utils.toArray('[data-count]').forEach(node => {
-			const value = Number(node.getAttribute('data-count'));
-			const state = { value: 0 };
-			gsap.to(state, {
-				value,
-				duration: 1.4,
-				ease: 'power2.out',
-				scrollTrigger: { trigger: node, start: 'top 90%' },
-				onUpdate: () => { node.textContent = String(Math.round(state.value)); }
-			});
-		});
-
-		/* deep dives ------------------------------------------------------------ */
-
-		// the terminal session types itself, line by line
+		/* the terminal session types itself -------------------------------------------- */
 		const terminalBody = document.querySelector('[data-terminal-typing] .terminal-body');
 		if (terminalBody) {
 			const lines = gsap.utils.toArray('[data-line]', terminalBody);
 			gsap.set(lines, { opacity: 0 });
-			const session = gsap.timeline({ scrollTrigger: { trigger: terminalBody, start: 'top 78%' } });
+			const session = gsap.timeline({ scrollTrigger: { trigger: terminalBody, start: 'top 80%' } });
 			lines.forEach(line => {
 				const text = line.textContent;
 				if (line.classList.contains('term-line') && text.trim().length > 0) {
@@ -278,9 +287,7 @@
 					session
 						.to(line, { opacity: 1, duration: 0.01 })
 						.to(state, {
-							i: text.length,
-							duration: Math.max(0.35, text.length * 0.026),
-							ease: 'none',
+							i: text.length, duration: Math.max(0.35, text.length * 0.026), ease: 'none',
 							onUpdate: () => { typedSpan.textContent = text.slice(0, Math.round(state.i)); }
 						});
 				} else {
@@ -290,29 +297,16 @@
 			});
 		}
 
-		// the squiggle draws itself, then the diagnostic card lands
+		/* the squiggle draws, then the diagnostic card lands ----------------------------- */
 		const squiggleLine = document.querySelector('.squiggle-line');
 		const squiggle = document.querySelector('.squiggle');
 		const diagCard = document.querySelector('[data-diag-card]');
 		if (squiggleLine && squiggle && diagCard) {
-			gsap.fromTo(squiggleLine, { scaleX: 0 }, {
-				scaleX: 1,
-				duration: 0.7,
-				ease: 'power2.out',
-				scrollTrigger: { trigger: squiggle, start: 'top 82%' }
-			});
-			gsap.fromTo(diagCard, { opacity: 0, y: 14 }, {
-				opacity: 1,
-				y: 0,
-				duration: 0.6,
-				ease: 'power3.out',
-				delay: 0.4,
-				scrollTrigger: { trigger: squiggle, start: 'top 82%' }
-			});
+			gsap.fromTo(squiggleLine, { scaleX: 0 }, { scaleX: 1, duration: 0.7, ease: 'power2.out', scrollTrigger: { trigger: squiggle, start: 'top 84%' } });
+			gsap.fromTo(diagCard, { opacity: 0, y: 14 }, { opacity: 1, y: 0, duration: 0.6, ease: 'power3.out', delay: 0.4, scrollTrigger: { trigger: squiggle, start: 'top 84%' } });
 		}
 
-		/* architecture ----------------------------------------------------------- */
-
+		/* architecture: draw the lines, then run signal pulses along the ports ------------ */
 		const archBoxes = gsap.utils.toArray('[data-arch-box]');
 		const archLines = gsap.utils.toArray('[data-arch-line]');
 		if (archBoxes.length) {
@@ -323,23 +317,45 @@
 			gsap.set(archBoxes, { opacity: 0, y: 18 });
 			gsap.timeline({ scrollTrigger: { trigger: '.arch-wrap', start: 'top 78%' } })
 				.to(archBoxes, { opacity: 1, y: 0, duration: 0.6, stagger: 0.08, ease: 'power3.out' })
-				.to(archLines, { strokeDashoffset: 0, duration: 0.9, stagger: 0.12, ease: 'power2.inOut' }, 0.35);
+				.to(archLines, { strokeDashoffset: 0, duration: 0.9, stagger: 0.1, ease: 'power2.inOut' }, 0.35);
+
+			// travelling pulses: a dot walks each MessagePort route, forever
+			const svg = document.querySelector('.arch');
+			const pulses = gsap.utils.toArray('[data-arch-pulse]').map((path, index) => {
+				const dot = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+				dot.setAttribute('r', '4');
+				dot.setAttribute('class', 'arch-pulse');
+				svg.appendChild(dot);
+				const length = path.getTotalLength();
+				const state = { t: 0 };
+				const tween = gsap.to(state, {
+					t: 1, duration: 3.4, ease: 'none', repeat: -1, delay: index * 1.1, paused: true,
+					onUpdate: () => {
+						const point = path.getPointAtLength(state.t * length);
+						dot.setAttribute('cx', point.x);
+						dot.setAttribute('cy', point.y);
+					}
+				});
+				return tween;
+			});
+			ScrollTrigger.create({
+				trigger: '.arch-wrap', start: 'top 80%', end: 'bottom top',
+				onEnter: () => pulses.forEach(tween => tween.play()),
+				onEnterBack: () => pulses.forEach(tween => tween.play()),
+				onLeave: () => pulses.forEach(tween => tween.pause()),
+				onLeaveBack: () => pulses.forEach(tween => tween.pause())
+			});
 		}
 
-		/* footer ghost word ------------------------------------------------------ */
-
+		/* the footer word ------------------------------------------------------------- */
 		const ghost = document.querySelector('.footer-word');
 		if (ghost) {
 			gsap.fromTo(ghost, { yPercent: 34, opacity: 0 }, {
-				yPercent: 0,
-				opacity: 1,
-				duration: 1.1,
-				ease: 'power3.out',
+				yPercent: 0, opacity: 1, duration: 1.1, ease: 'power3.out',
 				scrollTrigger: { trigger: '.footer', start: 'top 92%' }
 			});
 		}
 
-		// re-measure once the webfont lands (line splitting depends on metrics)
 		if (document.fonts && document.fonts.ready) {
 			document.fonts.ready.then(() => ScrollTrigger.refresh());
 		}

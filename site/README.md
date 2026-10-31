@@ -25,11 +25,22 @@ Opening `site/index.html` directly works too — the download links then point a
 
 ## Design notes
 
-- **Palette**: near-black page, layered surfaces, hairline borders, silver as the only accent —
-  strictly grayscale, matching the app icon (`scripts/make-icon.mjs`, "the slashed zero").
+**Art direction: "obsidian blueprint".** One idea per section, construction lines everywhere.
+
+- **Palette**: near-black surfaces, hairline borders, silver as the only accent — strictly
+  grayscale, matching the app icon (`scripts/make-icon.mjs`, "the slashed zero"). One **inverted
+  light band** (the numbers section) breaks the darkness on purpose.
+- **Type**: Space Grotesk for display (masthead, section titles, tickers, numerals), Inter for
+  copy, JetBrains Mono for anything that should read as code. The hero is a full-width masthead:
+  two display lines, one metallic-shimmer word, one outlined line.
+- **Signature moments**: a perspective grid floor with drifting lines in the hero; a two-row
+  kinetic ticker (solid + outlined, opposite directions); the capabilities rail pinned
+  horizontally with a progress hairline; sessions that stack and settle as the next one covers
+  them; travelling signal pulses on the MessagePort routes of the architecture figure; a
+  spotlight that follows the pointer across cards; a metallic word bleeding off the footer.
 - **Progressive motion**: hidden initial states are applied by `main.js` (never by CSS alone).
   If the GSAP CDN never answers — or `prefers-reduced-motion` is set — the page renders complete
-  and static, and every interaction still works.
-- **Type**: Inter for the UI, JetBrains Mono for anything that should read as code.
-- **Version numbers** in the hero, download cards and FAQ are hard-coded; bump them with
+  and static, and every interaction (nav, menu, copy, FAQ) still works. The pinned rail and the
+  sticky stack degrade to plain vertical flow below 900 px.
+- **Version numbers** in the hero, ship section and FAQ are hard-coded; bump them with
   `product.json` when a new build ships (`npm run dist` writes `dist/0varflex-<version>-arm64*`).

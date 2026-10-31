@@ -7,7 +7,7 @@
 //  - a `lastKnownDiskValue` guard keeps our own writes from re-triggering the watcher
 //  - 10 adds the WORKSPACE layer: DEFAULT < USER < WORKSPACE (real precedence)
 //
-// delta: the workspace layer reads `<folder>/.mini/settings.json` (see workspace.ts)
+// delta: the workspace layer reads `<folder>/.0varflex/settings.json` (see workspace.ts)
 
 import { applyEdits, findNodeAtLocation, modify, parse as parseJsonc, parseTree, ParseError, printParseErrorCode } from 'jsonc-parser';
 import { Emitter, Event } from '../../../base/common/event.js';
@@ -35,7 +35,7 @@ export class ConfigurationService extends Disposable implements IConfigurationSe
 
 	private readonly _defaultModel: ConfigurationModel;
 	private _userModel: ConfigurationModel;
-	/** 10: the workspace (folder) layer; empty until a folder with .mini/settings.json opens */
+	/** 10: the workspace (folder) layer; empty until a folder with .0varflex/settings.json opens */
 	private _workspaceModel: ConfigurationModel;
 	private _merged: ConfigurationModel;
 
@@ -89,7 +89,7 @@ export class ConfigurationService extends Disposable implements IConfigurationSe
 		return this._settingsPath;
 	}
 
-	/** 10: point the workspace layer at `<folder>/.mini/settings.json` (null closes the folder) */
+	/** 10: point the workspace layer at `<folder>/.0varflex/settings.json` (null closes the folder) */
 	setWorkspaceSettingsPath(settingsPath: string | null): void {
 		if (this._workspaceSettingsPath === settingsPath) {
 			return;

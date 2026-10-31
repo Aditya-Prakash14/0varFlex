@@ -27,7 +27,7 @@ export const PREVIOUS_EDITOR_ID = 'workbench.action.previousEditor';
 export const OPEN_SAMPLE_FILE_ID = 'mini.openSampleFile';
 
 const SAMPLE_FILE_TEXT = [
-	'// mini-vscode sample — the first real file this editor opens',
+	'// 0varflex sample — the first real file this editor opens',
 	'export function greet(name: string): string {',
 	'\tconst message = `hello, ${name}`;',
 	'\treturn message; // try editing me',

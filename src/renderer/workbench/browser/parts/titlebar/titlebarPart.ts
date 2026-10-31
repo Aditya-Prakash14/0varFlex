@@ -22,7 +22,7 @@ export class TitlebarPart extends Part {
 	protected override createContentArea(parent: HTMLElement): HTMLElement {
 		return append(parent, $('.titlebar-content', {},
 			$('.titlebar-left'),
-			$('.titlebar-center', {}, $('span.titlebar-title', {}, 'mini-vscode')),
+			$('.titlebar-center', {}, $('span.titlebar-title', {}, '0varflex')),
 			$('.titlebar-right')
 		));
 	}

@@ -68,12 +68,12 @@ run(process.execPath, ['scripts/check-dist.mjs']);
 
 // ---- 6. instructions
 
-const appPath = path.join(root, 'dist', 'mac-arm64', 'mini-vscode.app');
+const appPath = path.join(root, 'dist', 'mac-arm64', '0varflex.app');
 console.log(`
 dist complete: version ${product.version}
-  install:   ditto "${path.relative(root, appPath)}" /Applications/mini-vscode.app
-  launch it: open -a /Applications/mini-vscode.app
-  CLI:       Shell Command: Install 'mini' command in PATH (from the palette), then: mini .
+  install:   ditto "${path.relative(root, appPath)}" /Applications/0varflex.app
+  launch it: open -a /Applications/0varflex.app
+  CLI:       Shell Command: Install '0varflex' command in PATH (from the palette), then: 0varflex .
   updates:   1) npm version patch --no-git-tag-version   (package.json only)
              2) edit product.json's "version" to the same value
              3) node scripts/updates-server.mjs          (serves dist/ on :8123)

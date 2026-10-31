@@ -3,7 +3,7 @@
 // 14 added the shipping pieces, ported in shape from vs/code/electron-main/main.ts +
 // code/node/cli.ts:
 //
-//   - a SINGLE INSTANCE: a second `mini file` hands its argv over through Electron's
+//   - a SINGLE INSTANCE: a second `0varflex file` hands its argv over through Electron's
 //     `second-instance` event and exits (the real CLI talks to the running instance over a
 //     socket — delta documented);
 //   - the CLI decision table (`--open-file`/`--open-folder`, bare paths, unknown flags) lives in
@@ -77,8 +77,8 @@ function showStartupFailure(error: unknown): void {
 	try {
 		const result = dialog.showMessageBoxSync({
 			type: 'error',
-			title: 'mini-vscode',
-			message: 'mini-vscode failed to start',
+			title: '0varflex',
+			message: '0varflex failed to start',
 			detail,
 			buttons: ['Copy Error', 'Close'],
 			defaultId: 1,
@@ -144,7 +144,7 @@ const ipc = new MainProcessIpc((server, store, sender) => {
 });
 
 function main(): void {
-	// a second `mini …`: focus the window and hand the argv to its renderer
+	// a second `0varflex …`: focus the window and hand the argv to its renderer
 	app.on('second-instance', (_event, argv, workingDirectory) => {
 		const window = BrowserWindow.getAllWindows()[0];
 		if (window) {

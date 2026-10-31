@@ -77,7 +77,7 @@ const VALID_MANIFEST = JSON.stringify({
 	name: 'hello',
 	publisher: 'Mini',
 	version: '1.0.0',
-	engines: { 'mini-vscode': '^0.0.1' },
+	engines: { '0varflex': '^0.0.1' },
 	main: './out/extension.js',
 	activationEvents: ['onCommand:hello.sayHello'],
 	contributes: { commands: [{ command: 'hello.sayHello', title: 'Say Hello', category: 'Hello' }] }
@@ -99,13 +99,13 @@ test('identity: lowercase identity, display casing preserved (the reference rule
 });
 
 test('validator: the ported required-field list', () => {
-	const missingName = validateManifest({ publisher: 'a', version: '1.0.0', engines: { 'mini-vscode': '*' } });
+	const missingName = validateManifest({ publisher: 'a', version: '1.0.0', engines: { '0varflex': '*' } });
 	assert.ok(missingName.messages.some(m => m.message.includes('`name`')), JSON.stringify(missingName.messages));
 
 	const missingEngines = validateManifest({ name: 'a', publisher: 'a', version: '1.0.0' });
 	assert.ok(missingEngines.messages.some(m => m.message.includes('engines')), JSON.stringify(missingEngines.messages));
 
-	const activationWithoutMain = validateManifest({ name: 'a', publisher: 'a', version: '1.0.0', engines: { 'mini-vscode': '*' }, activationEvents: ['onCommand:x'] });
+	const activationWithoutMain = validateManifest({ name: 'a', publisher: 'a', version: '1.0.0', engines: { '0varflex': '*' }, activationEvents: ['onCommand:x'] });
 	assert.ok(activationWithoutMain.messages.some(m => m.message.includes('`main`')), JSON.stringify(activationWithoutMain.messages));
 
 	const valid = validateManifest(JSON.parse(VALID_MANIFEST));
@@ -153,7 +153,7 @@ test('scanner: missing package.json is skipped with a log line', async () => {
 });
 
 test('scanner: missing name (invalid manifest) is skipped and logged', async () => {
-	const fs = scanRootWith(JSON.stringify({ publisher: 'mini', version: '1.0.0', engines: { 'mini-vscode': '*' } }));
+	const fs = scanRootWith(JSON.stringify({ publisher: 'mini', version: '1.0.0', engines: { '0varflex': '*' } }));
 	const logger = makeLogger();
 	const { result } = await scanExtensions(fs, { directories: [{ path: '/builtin', kind: 'builtin' }], currentVersion: '0.0.1', log: logger.log });
 	assert.equal(result.extensions.length, 0);
@@ -162,7 +162,7 @@ test('scanner: missing name (invalid manifest) is skipped and logged', async () 
 
 test('scanner: incompatible engines disables (not crashes)', async () => {
 	const fs = scanRootWith(JSON.stringify({
-		name: 'old', publisher: 'mini', version: '1.0.0', engines: { 'mini-vscode': '^9.0.0' }, main: './out/extension.js'
+		name: 'old', publisher: 'mini', version: '1.0.0', engines: { '0varflex': '^9.0.0' }, main: './out/extension.js'
 	}));
 	const logger = makeLogger();
 	const { result } = await scanExtensions(fs, { directories: [{ path: '/builtin', kind: 'builtin' }], currentVersion: '0.0.1', log: logger.log });
@@ -175,7 +175,7 @@ test('scanner: duplicate identity — first wins, second warns', async () => {
 	fs.addDirectory('/builtin', ['one', 'two']);
 	for (const folder of ['one', 'two']) {
 		fs.addDirectory(`/builtin/${folder}`, ['package.json']);
-		fs.addFile(`/builtin/${folder}/package.json`, JSON.stringify({ name: 'dup', publisher: 'mini', version: '1.0.0', engines: { 'mini-vscode': '*' }, main: './out/extension.js' }));
+		fs.addFile(`/builtin/${folder}/package.json`, JSON.stringify({ name: 'dup', publisher: 'mini', version: '1.0.0', engines: { '0varflex': '*' }, main: './out/extension.js' }));
 	}
 	const logger = makeLogger();
 	const { result } = await scanExtensions(fs, { directories: [{ path: '/builtin', kind: 'builtin' }], currentVersion: '0.0.1', log: logger.log });
@@ -202,7 +202,7 @@ test('scanner: the manifest cache skips unchanged directories (mtime keys)', asy
 });
 
 test('scanner: real VS Code extensions fail gracefully (engines.vscode only)', async () => {
-	// a manifest shaped like a real workbench extension: it parses, but engines.mini-vscode is missing
+	// a manifest shaped like a real workbench extension: it parses, but engines.0varflex is missing
 	const realish = JSON.stringify({
 		name: 'git', publisher: 'vscode', version: '1.0.0', engines: { vscode: '^1.80.0' }, main: './out/extension.js'
 	});

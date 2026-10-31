@@ -15,7 +15,7 @@ export interface ICliPath {
 
 export interface ICliArgs {
 	readonly paths: readonly ICliPath[];
-	/** true when the process was launched by the `mini` CLI script (any --open-* flag) */
+	/** true when the process was launched by the `0varflex` CLI script (any --open-* flag) */
 	readonly explicitOpen: boolean;
 }
 

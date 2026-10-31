@@ -3,7 +3,7 @@
 // context service publishes folder changes. Course scope: a SINGLE folder.
 //
 // delta: the real workspace settings live in `<folder>/.vscode/settings.json`; we use
-// `<folder>/.mini/settings.json` so the app never touches a real VS Code workspace's files.
+// `<folder>/.0varflex/settings.json` so the app never touches a real VS Code workspace's files.
 
 import { Emitter, Event } from '../../../base/common/event.js';
 import { Disposable } from '../../../base/common/lifecycle.js';
@@ -24,7 +24,7 @@ export interface IWorkspaceFoldersChangeEvent {
 	readonly removed: readonly IWorkspaceFolder[];
 }
 
-export const MINI_WORKSPACE_FOLDER = '.mini';
+export const MINI_WORKSPACE_FOLDER = '.0varflex';
 
 export function folderNameFromUri(uri: URI): string {
 	const segments = uri.fsPath.replace(/[\\/]+$/, '').split(/[\\/]/);

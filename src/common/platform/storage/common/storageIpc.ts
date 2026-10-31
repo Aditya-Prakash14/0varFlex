@@ -23,7 +23,7 @@ export class StorageMainService implements IServerChannel<unknown> {
 	constructor(userDataPath: string) {
 		this._files.set(StorageScope.APPLICATION, path.join(userDataPath, 'storage.json'));
 		// a workspace identity would hash the folder uri; there are no folders until 10
-		const hash = createHash('sha256').update('mini-vscode-workspace').digest('hex');
+		const hash = createHash('sha256').update('0varflex-workspace').digest('hex');
 		this._files.set(StorageScope.WORKSPACE, path.join(userDataPath, 'workspaceStorage', hash, 'state.json'));
 	}
 

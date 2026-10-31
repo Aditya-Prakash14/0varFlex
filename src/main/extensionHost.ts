@@ -52,7 +52,7 @@ export class ExtensionHostLauncher {
 		// the bundle lives OUTSIDE the asar (asarUnpack): exec cannot read inside it
 		const hostPath = unpackedPath('out', 'extHost.cjs');
 		const child = utilityProcess.fork(hostPath, [], {
-			serviceName: 'mini-vscode extension host',
+			serviceName: '0varflex extension host',
 			stdio: 'inherit'
 		});
 		this._child = child;

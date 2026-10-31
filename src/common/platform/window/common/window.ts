@@ -6,7 +6,7 @@ export interface IWindowInfo {
 	readonly id: number;
 	readonly bounds: { readonly x: number; readonly y: number; readonly width: number; readonly height: number };
 	readonly focused: boolean;
-	/** the app version from package.json (11: `engines.mini-vscode` checks) */
+	/** the app version from package.json (11: `engines.0varflex` checks) */
 	readonly appVersion: string;
 }
 
@@ -66,13 +66,13 @@ export interface IWindowChannel {
 	resolveClose(allow: boolean): Promise<void>;
 	/** ask main to request a close (fires the same flow; the dev hook and tests drive this) */
 	requestCloseWindow(): Promise<void>;
-	/** the file passed on the command line (`mini-vscode somepath.txt`), or null */
+	/** the file passed on the command line (`0varflex somepath.txt`), or null */
 	getOpenedFile(): Promise<string | null>;
 	/** 14: every path the CLI asked to open (files AND folders), from the first launch */
 	getInitialPaths(): Promise<readonly IWindowCliPath[]>;
-	/** 14: a second `mini` launch forwarded its argv here (single-instance) */
+	/** 14: a second `0varflex` launch forwarded its argv here (single-instance) */
 	onDidOpenPaths: Event<readonly IWindowCliPath[]>;
-	/** 14: `Shell Command: Install 'mini' command in PATH` (the real installCommandLine action) */
+	/** 14: `Shell Command: Install '0varflex' command in PATH` (the real installCommandLine action) */
 	installShellCommand(): Promise<IInstallCommandResult>;
 	/** 14: the About dialog's version list */
 	getVersionInfo(): Promise<IVersionInfo>;

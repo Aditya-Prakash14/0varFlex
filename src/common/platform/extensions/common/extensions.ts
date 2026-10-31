@@ -43,7 +43,7 @@ export interface IExtensionManifest {
 	readonly name: string;
 	readonly publisher: string;
 	readonly version: string;
-	readonly engines: { readonly 'mini-vscode': string };
+	readonly engines: { readonly '0varflex': string };
 	readonly main?: string;
 	readonly activationEvents?: readonly string[];
 	readonly contributes?: IExtensionContributions;
@@ -113,8 +113,8 @@ export function validateManifest(candidate: unknown): IValidationResult {
 	}
 	if (!manifest.engines || typeof manifest.engines !== 'object') {
 		messages.push({ severity: 'error', message: 'property `engines` is mandatory and must be of type `object`.' });
-	} else if (!isString((manifest.engines as { [key: string]: unknown })['mini-vscode'])) {
-		messages.push({ severity: 'error', message: 'property `engines.mini-vscode` is mandatory and must be of type `string`.' });
+	} else if (!isString((manifest.engines as { [key: string]: unknown })['0varflex'])) {
+		messages.push({ severity: 'error', message: 'property `engines.0varflex` is mandatory and must be of type `string`.' });
 	}
 	if (manifest.activationEvents !== undefined && !isValidStringArray(manifest.activationEvents)) {
 		messages.push({ severity: 'error', message: 'property `activationEvents` can be omitted or must be of type `string[]`.' });
@@ -177,32 +177,32 @@ export function checkEngineCompatibility(engineRange: string, currentVersion: st
 	if (requested.startsWith('^')) {
 		const wanted = parseVersion(requested.substring(1));
 		if (!wanted) {
-			return { compatible: false, message: `Could not parse \`engines.mini-vscode\` value ${requested}. Please use, for example: ^1.22.0, ^1.22.x, etc.` };
+			return { compatible: false, message: `Could not parse \`engines.0varflex\` value ${requested}. Please use, for example: ^1.22.0, ^1.22.x, etc.` };
 		}
 		const compatible = current[0] === wanted[0] && compareVersions(current, wanted) >= 0;
-		return compatible ? { compatible } : { compatible, message: `Extension is not compatible with mini-vscode ${currentVersion}. Extension requires: ${requested}.` };
+		return compatible ? { compatible } : { compatible, message: `Extension is not compatible with 0varflex ${currentVersion}. Extension requires: ${requested}.` };
 	}
 	if (requested.startsWith('>=')) {
 		const wanted = parseVersion(requested.substring(2));
 		if (!wanted) {
-			return { compatible: false, message: `Could not parse \`engines.mini-vscode\` value ${requested}.` };
+			return { compatible: false, message: `Could not parse \`engines.0varflex\` value ${requested}.` };
 		}
 		const compatible = compareVersions(current, wanted) >= 0;
-		return compatible ? { compatible } : { compatible, message: `Extension is not compatible with mini-vscode ${currentVersion}. Extension requires: ${requested}.` };
+		return compatible ? { compatible } : { compatible, message: `Extension is not compatible with 0varflex ${currentVersion}. Extension requires: ${requested}.` };
 	}
 
 	// `a.b.x` allows any patch, like the reference's caret-adjacent forms
 	const wildcard = /^(\d+)\.(\d+)\.x$/.exec(requested);
 	if (wildcard) {
 		const compatible = current[0] === Number(wildcard[1]) && current[1] === Number(wildcard[2]);
-		return compatible ? { compatible } : { compatible, message: `Extension is not compatible with mini-vscode ${currentVersion}. Extension requires: ${requested}.` };
+		return compatible ? { compatible } : { compatible, message: `Extension is not compatible with 0varflex ${currentVersion}. Extension requires: ${requested}.` };
 	}
 
 	const exact = parseVersion(requested);
 	if (exact) {
 		const compatible = compareVersions(current, exact) === 0;
-		return compatible ? { compatible } : { compatible, message: `Extension is not compatible with mini-vscode ${currentVersion}. Extension requires: ${requested}.` };
+		return compatible ? { compatible } : { compatible, message: `Extension is not compatible with 0varflex ${currentVersion}. Extension requires: ${requested}.` };
 	}
 
-	return { compatible: false, message: `Could not parse \`engines.mini-vscode\` value ${requested}. Please use, for example: ^1.22.0, ^1.22.x, etc.` };
+	return { compatible: false, message: `Could not parse \`engines.0varflex\` value ${requested}. Please use, for example: ^1.22.0, ^1.22.x, etc.` };
 }

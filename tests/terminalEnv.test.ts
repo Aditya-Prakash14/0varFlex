@@ -28,7 +28,7 @@ test('sanitizePtyEnv drops the host’s injections and stamps TERM*', () => {
 	assert.equal(env.ELECTRON_RUN_AS_NODE, undefined);
 	assert.equal(env.ELECTRON_ENABLE_LOGGING, undefined);
 	assert.equal(env.MINI_VSCODE_VERSION, undefined);
-	assert.equal(env.TERM_PROGRAM, 'mini-vscode');
+	assert.equal(env.TERM_PROGRAM, '0varflex');
 	assert.equal(env.TERM_PROGRAM_VERSION, '9.9.9');
 	assert.equal(env.TERM, 'xterm-256color');
 });

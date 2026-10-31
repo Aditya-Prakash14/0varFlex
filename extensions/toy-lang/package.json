@@ -1,9 +1,9 @@
 {
 	"name": "toy-lang",
-	"publisher": "mini",
+	"publisher": "0varflex",
 	"version": "1.0.0",
 	"engines": {
-		"mini-vscode": "^1.0.0"
+		"0varflex": "^1.0.0"
 	},
 	"main": "./out/extension.js",
 	"activationEvents": [

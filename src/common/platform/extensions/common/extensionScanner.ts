@@ -170,7 +170,7 @@ export async function scanExtensions(fileSystem: IScannerFileSystem, options: IS
 			}
 
 			// engines: incompatible → log and DISABLE, never crash (the acceptance relies on it)
-			const compatibility = checkEngineCompatibility(manifest.engines['mini-vscode'], options.currentVersion);
+			const compatibility = checkEngineCompatibility(manifest.engines['0varflex'], options.currentVersion);
 			if (!compatibility.compatible) {
 				errors.push({ path: directoryPath, message: compatibility.message ?? 'incompatible' });
 				options.log.warn(`extension ${toExtensionIdentifier(manifest.publisher, manifest.name)} disabled: ${compatibility.message}`);
@@ -190,7 +190,7 @@ export async function scanExtensions(fileSystem: IScannerFileSystem, options: IS
 				name: manifest.name,
 				publisher: manifest.publisher,
 				version: manifest.version,
-				engines: manifest.engines['mini-vscode'],
+				engines: manifest.engines['0varflex'],
 				main: manifest.main,
 				activationEvents: manifest.activationEvents ?? [],
 				contributes: manifest.contributes ?? {},

@@ -79,7 +79,7 @@ function installDownloadedZip(version: string | undefined): boolean {
 		return false;
 	}
 	// electron-updater's cache dir: the platform cache dir + updaterCacheDirName (app-update.yml)
-	const pending = path.join(app.getPath('home'), 'Library', 'Caches', 'mini-vscode-updater', 'pending');
+	const pending = path.join(app.getPath('home'), 'Library', 'Caches', '0varflex-updater', 'pending');
 	let zipPath: string | undefined;
 	try {
 		const candidates = readdirSync(pending)

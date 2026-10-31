@@ -41,7 +41,7 @@ export class PtyHostStarter {
 		// the bundle lives OUTSIDE the asar (asarUnpack): exec cannot read inside it
 		const hostPath = unpackedPath('out', 'ptyHost.cjs');
 		const child = utilityProcess.fork(hostPath, [], {
-			serviceName: 'mini-vscode pty host',
+			serviceName: '0varflex pty host',
 			stdio: 'inherit',
 			// the host stamps TERM_PROGRAM_VERSION from this
 			env: { ...process.env, MINI_VSCODE_VERSION: app.getVersion() }

@@ -34,15 +34,15 @@ export function registerShippingActions(
 		await showAboutDialog(await windowChannel.getVersionInfo(), text => windowChannel.writeClipboardText(text));
 	});
 
-	// ---- Shell Command: Install 'mini' command in PATH (the real id) -----------------------
+	// ---- Shell Command: Install '0varflex' command in PATH (the real id) --------------------
 
-	register('workbench.action.installCommandLine', `Install 'mini' command in PATH`, async () => {
+	register('workbench.action.installCommandLine', `Install '0varflex' command in PATH`, async () => {
 		const result = await windowChannel.installShellCommand();
 		if (result.ok) {
 			// the real success text: "Shell command '<name>' successfully installed in PATH."
-			void notifications.show({ severity: 'info', message: `Shell command 'mini' successfully installed in PATH (${result.target}).` });
+			void notifications.show({ severity: 'info', message: `Shell command '0varflex' successfully installed in PATH (${result.target}).` });
 		} else {
-			void notifications.show({ severity: 'error', message: `Failed to install the 'mini' command: ${result.error}` });
+			void notifications.show({ severity: 'error', message: `Failed to install the '0varflex' command: ${result.error}` });
 		}
 	});
 

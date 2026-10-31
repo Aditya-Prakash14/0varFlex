@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# resources/cli/mini — the `mini` shell launcher, ported from the real `code` CLI script
+# resources/cli/0varflex — the `0varflex` shell launcher, ported from the real `code` CLI script
 # (resources/darwin/bin/code.sh): the symlink-chain resolution with the `.app` trim is the
-# brew-cask trick, so `mini` keeps working when a symlink points at it from anywhere.
+# brew-cask trick, so `0varflex` keeps working when a symlink points at it from anywhere.
 #
 # Differences from the real script (documented deltas):
 #   - the real one runs a node CLI that speaks to the running instance over a socket; ours
@@ -41,10 +41,10 @@ if [ -z "$APP_PATH" ]; then
 fi
 
 CONTENTS="$APP_PATH/Contents"
-ELECTRON="$CONTENTS/MacOS/mini-vscode"
+ELECTRON="$CONTENTS/MacOS/0varflex"
 
 if [ ! -x "$ELECTRON" ]; then
-	echo "Could not find the mini-vscode binary at $ELECTRON" >&2
+	echo "Could not find the 0varflex binary at $ELECTRON" >&2
 	exit 1
 fi
 

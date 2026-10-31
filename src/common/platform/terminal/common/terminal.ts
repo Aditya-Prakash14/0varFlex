@@ -15,7 +15,7 @@ export interface IProcessEnvironment {
 }
 
 /** the real product id streaming into the shell */
-export const TERM_PROGRAM = 'mini-vscode';
+export const TERM_PROGRAM = '0varflex';
 
 export interface ICreateProcessOptions {
 	/** undefined → the pty host resolves the user's shell ($SHELL, /bin/zsh fallback) */

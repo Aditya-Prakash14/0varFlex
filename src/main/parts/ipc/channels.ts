@@ -42,7 +42,7 @@ class WindowChannelService implements IWindowChannel {
 	private readonly _onMenuCommand = new Emitter<WindowMenuCommand>();
 	private readonly _onDidChangeFullScreen = new Emitter<boolean>();
 	private readonly _onWillCloseWindow = new Emitter<void>();
-	/** 14: a second `mini` launch forwarded its argv (single-instance) */
+	/** 14: a second `0varflex` launch forwarded its argv (single-instance) */
 	private readonly _onDidOpenPaths = new Emitter<readonly IWindowCliPath[]>();
 
 	/** set once the renderer allowed the close (or the watchdog did) */
@@ -198,13 +198,13 @@ class WindowChannelService implements IWindowChannel {
 	}
 
 	/**
-	 * `Shell Command: Install 'mini' command in PATH` — the real action symlinks the launcher
+	 * `Shell Command: Install '0varflex' command in PATH` — the real action symlinks the launcher
 	 * into /usr/local/bin and falls back to ~/bin (ported shape: try the PATH dir, then HOME).
 	 */
 	async installShellCommand(): Promise<IInstallCommandResult> {
 		const scriptPath = app.isPackaged
-			? path.join(process.resourcesPath, 'cli', 'mini')
-			: path.join(app.getAppPath(), 'resources', 'cli', 'mini');
+			? path.join(process.resourcesPath, 'cli', '0varflex')
+			: path.join(app.getAppPath(), 'resources', 'cli', '0varflex');
 
 		if (!fs.existsSync(scriptPath)) {
 			return { ok: false, error: `the CLI script is missing: ${scriptPath}` };
@@ -222,7 +222,7 @@ class WindowChannelService implements IWindowChannel {
 			} catch {
 				continue;
 			}
-			const target = path.join(directory, 'mini');
+			const target = path.join(directory, '0varflex');
 			try {
 				if (fs.lstatSync(target)) {
 					// something is already there: ours (same symlink) is idempotent success,
@@ -337,7 +337,7 @@ export function sendMenuCommand(command: WindowMenuCommand): void {
 	windowServices.get(window.id)?.fireMenuCommand(command);
 }
 
-/** 14: a second `mini` launch forwards its argv into the (single) window's renderer. */
+/** 14: a second `0varflex` launch forwards its argv into the (single) window's renderer. */
 export function sendPathsToWindow(paths: readonly IWindowCliPath[]): void {
 	const window = BrowserWindow.getAllWindows()[0];
 	if (!window) {
@@ -355,9 +355,9 @@ function readProduct(): { nameShort: string; version: string; commit?: string; d
 	try {
 		const text = fs.readFileSync(path.join(app.getAppPath(), 'product.json'), 'utf8');
 		const parsed = JSON.parse(text) as { nameShort?: string; version?: string; commit?: string; date?: string };
-		cachedProduct = { nameShort: parsed.nameShort ?? 'mini-vscode', version: parsed.version ?? app.getVersion(), commit: parsed.commit, date: parsed.date };
+		cachedProduct = { nameShort: parsed.nameShort ?? '0varflex', version: parsed.version ?? app.getVersion(), commit: parsed.commit, date: parsed.date };
 	} catch {
-		cachedProduct = { nameShort: 'mini-vscode', version: app.getVersion() };
+		cachedProduct = { nameShort: '0varflex', version: app.getVersion() };
 	}
 	return cachedProduct;
 }

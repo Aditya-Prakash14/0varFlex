@@ -270,7 +270,7 @@ export class EditorGroupView extends Disposable {
 
 	private _createWatermark(): HTMLElement {
 		const watermark = append(this._contentElement, $('.editor-watermark'));
-		append(watermark, $('.watermark-title', {}, 'mini-vscode'));
+		append(watermark, $('.watermark-title', {}, '0varflex'));
 		for (const hint of WATERMARK_HINTS) {
 			const entry = $('.watermark-entry');
 			if (hint.disabledReason) {

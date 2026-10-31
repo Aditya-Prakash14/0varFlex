@@ -27,7 +27,7 @@ function makeLogService(): { service: ILogService; errors: string[] } {
 }
 
 const SETTINGS = '/test/User/settings.json';
-const WORKSPACE_SETTINGS = '/test/workspace/.mini/settings.json';
+const WORKSPACE_SETTINGS = '/test/workspace/.0varflex/settings.json';
 
 /** the harness gives every test a real FileService over the in-memory provider */
 function makeFileService(initialContent?: string): ReturnType<typeof createTestFileService> {

@@ -8,7 +8,9 @@ const product = require('./product.json');
 /** @type {import('electron-builder').Configuration} */
 module.exports = {
 	appId: product.darwinBundleIdentifier,
-	productName: 'mini-vscode',
+	// single source of truth: the app name (bundle name, artifacts, updater cache dir) follows
+	// product.json's nameShort
+	productName: product.nameShort,
 	copyright: `Copyright © 2026 ${product.nameShort}`,
 
 	directories: {
@@ -29,11 +31,11 @@ module.exports = {
 		main: 'out/main.js'
 	},
 
-	// the `mini` CLI script lives OUTSIDE the asar (a shell script needs a real path).
+	// the `0varflex` CLI script lives OUTSIDE the asar (a shell script needs a real path).
 	// node-pty also lives outside the asar: its own asar rewrite breaks a path that already
 	// contains app.asar.unpacked (see asarUnpack below).
 	extraResources: [
-		{ from: 'resources/cli/mini', to: 'cli/mini' },
+		{ from: 'resources/cli/0varflex', to: 'cli/0varflex' },
 		{ from: 'node_modules/node-pty', to: 'node_modules/node-pty' }
 	],
 

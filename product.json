@@ -1,11 +1,11 @@
 {
-	"nameShort": "mini-vscode",
-	"nameLong": "mini-vscode",
-	"applicationName": "mini",
-	"version": "1.0.1",
-	"commit": "4cc02a2",
+	"nameShort": "0varflex",
+	"nameLong": "0varflex",
+	"applicationName": "0varflex",
+	"version": "1.0.2",
+	"commit": "b024c95",
 	"date": "2026-10-31",
-	"darwinBundleIdentifier": "com.minidev.minivscode",
+	"darwinBundleIdentifier": "com.minidev.0varflex",
 	"licenseName": "MIT",
 	"licenseUrl": "https://opensource.org/licenses/MIT"
 }

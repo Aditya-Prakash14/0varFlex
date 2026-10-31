@@ -1,6 +1,6 @@
 {
-	"name": "mini-vscode",
-	"version": "1.0.1",
+	"name": "0varflex",
+	"version": "1.0.2",
 	"private": true,
 	"type": "module",
 	"main": "out/main.js",

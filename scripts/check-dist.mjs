@@ -15,7 +15,7 @@ import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
 const root = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const product = JSON.parse(readFileSync(path.join(root, 'product.json'), 'utf8'));
-const appPath = path.join(root, 'dist', 'mac-arm64', 'mini-vscode.app');
+const appPath = path.join(root, 'dist', 'mac-arm64', '0varflex.app');
 
 let failures = 0;
 const check = (name, condition, detail = '') => {
@@ -35,10 +35,17 @@ if (!existsSync(appPath)) {
 const plistValue = key => execFileSync('plutil', ['-extract', key, 'raw', path.join(appPath, 'Contents', 'Info.plist')], { encoding: 'utf8' }).trim();
 check('CFBundleIdentifier matches product.json', plistValue('CFBundleIdentifier') === product.darwinBundleIdentifier, plistValue('CFBundleIdentifier'));
 check('CFBundleShortVersionString matches product.json', plistValue('CFBundleShortVersionString') === product.version, `${plistValue('CFBundleShortVersionString')} vs ${product.version}`);
-check('CFBundleName is the product name', plistValue('CFBundleName') === 'mini-vscode', plistValue('CFBundleName'));
+check('CFBundleName is the product name', plistValue('CFBundleName') === '0varflex', plistValue('CFBundleName'));
 check('the icon is bundled', existsSync(path.join(appPath, 'Contents', 'Resources', 'icon.icns')) || existsSync(path.join(appPath, 'Contents', 'Resources', 'electron.icns')), 'no icns in Resources');
-check('the CLI script is bundled outside the asar', existsSync(path.join(appPath, 'Contents', 'Resources', 'cli', 'mini')));
+check('the CLI script is bundled outside the asar', existsSync(path.join(appPath, 'Contents', 'Resources', 'cli', '0varflex')));
 check('app-update.yml was generated (the generic feed)', existsSync(path.join(appPath, 'Contents', 'Resources', 'app-update.yml')));
+// the update service's local-install fallback looks the downloaded zip up under this name:
+// electron-builder derives it from productName, the code from product name — they must agree
+if (existsSync(path.join(appPath, 'Contents', 'Resources', 'app-update.yml'))) {
+	const updateYml = readFileSync(path.join(appPath, 'Contents', 'Resources', 'app-update.yml'), 'utf8');
+	const cacheDirLine = updateYml.split('\n').find(line => line.startsWith('updaterCacheDirName')) ?? '(missing)';
+	check('the updater cache dir follows the product name', cacheDirLine.includes(`${product.nameShort}-updater`), cacheDirLine);
+}
 
 // ---- the asar contents (via @electron/asar, a transitive electron-builder dependency)
 
@@ -85,9 +92,9 @@ if (existsSync(ymlPath)) {
 	check('latest-mac.yml points at the zip', /\.zip/.test(yml) && yml.includes('sha512'), 'no zip/sha512 entry');
 }
 // electron-builder's default mac zip name: <productName>-<version>-<arch>-mac.zip
-const zipCandidates = [`mini-vscode-${product.version}-arm64-mac.zip`, `mini-vscode-${product.version}-arm64.zip`, `mini-vscode-${product.version}.zip`];
+const zipCandidates = [`0varflex-${product.version}-arm64-mac.zip`, `0varflex-${product.version}-arm64.zip`, `0varflex-${product.version}.zip`];
 check('the mac zip artifact exists', zipCandidates.some(name => existsSync(path.join(root, 'dist', name))), zipCandidates.join(' or '));
-check('the dmg artifact exists', ['mini-vscode-' + product.version + '-arm64.dmg', `mini-vscode-${product.version}.dmg`].some(name => existsSync(path.join(root, 'dist', name))));
+check('the dmg artifact exists', ['0varflex-' + product.version + '-arm64.dmg', `0varflex-${product.version}.dmg`].some(name => existsSync(path.join(root, 'dist', name))));
 
 // ---- codesign (ad-hoc in this pipeline)
 

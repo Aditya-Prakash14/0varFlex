@@ -1,12 +1,12 @@
 <div align="center">
 
 <pre>
-███╗   ███╗  ██╗  ███╗   ██╗  ██╗             ██╗   ██╗  ███████╗   ██████╗    ██████╗   ██████╗   ███████╗
-████╗ ████║  ██║  ████╗  ██║  ██║             ██║   ██║  ██╔════╝  ██╔════╝   ██╔═══██╗  ██╔══██╗  ██╔════╝
-██╔████╔██║  ██║  ██╔██╗ ██║  ██║   ███████   ██║   ██║  ███████╗  ██║        ██║   ██║  ██║  ██║  █████╗
-██║╚██╔╝██║  ██║  ██║╚██╗██║  ██║   ╚══════   ╚██╗ ██╔╝  ╚════██║  ██║        ██║   ██║  ██║  ██║  ██╔══╝
-██║ ╚═╝ ██║  ██║  ██║ ╚████║  ██║              ╚████╔╝   ███████║  ╚██████╗   ╚██████╔╝  ██████╔╝  ███████╗
-╚═╝     ╚═╝  ╚═╝  ╚═╝  ╚═══╝  ╚═╝               ╚═══╝    ╚══════╝   ╚═════╝    ╚═════╝   ╚═════╝   ╚══════╝
+ ██████╗  ██╗   ██╗   █████╗  ██████╗  ███████╗  ██╗  ███████╗  ██╗  ██╗
+██╔═████╗  ██║   ██║  ██╔══██╗  ██╔══██╗  ██╔════╝  ██║  ██╔════╝  ╚██╗██╔╝
+██║██╔██║  ██║   ██║  ███████║  ██████╔╝  █████╗  ██║  █████╗   ╚███╔╝
+████╔╝██║  ╚██╗ ██╔╝  ██╔══██║  ██╔══██╗  ██╔══╝  ██║  ██╔══╝   ██╔██╗
+╚██████╔╝   ╚████╔╝  ██║  ██║  ██║  ██║  ██║  ███████╗  ███████╗  ██╔╝ ██╗
+ ╚═════╝    ╚═══╝  ╚═╝  ╚═╝  ╚═╝  ╚═╝  ╚═╝  ╚══════╝  ╚══════╝  ╚═╝  ╚═╝
 </pre>
 
 **A miniature VS Code, built from scratch and ported from the real architecture — exercise by exercise.**
@@ -23,7 +23,7 @@
 
 ## What is this?
 
-`mini-vscode` is a working miniature of VS Code: a real Electron app with a workbench shell,
+`0varflex` is a working miniature of VS Code: a real Electron app with a workbench shell,
 editor, explorer, file watcher, extension host, language features and an integrated terminal —
 each one **ported in structure from the actual VS Code source** (a local reference tree under
 `rebuild-vscode/reference/vscode`), not re-invented from blog posts.
@@ -51,7 +51,7 @@ CRLF detection, save points (Alt-editing semantics).
 **Files & workspace** — a main-process file service behind one `file` channel; atomic saves
 (temp + fsync + rename); deletes to the OS trash; a recursive watcher with 100 ms coalescing and
 a stale-delete guard; Explorer with create/rename/delete/refresh; a single-folder workspace
-(`.mini/settings.json`), restored on relaunch; external-change reloads and dirty-file warnings.
+(`.0varflex/settings.json`), restored on relaunch; external-change reloads and dirty-file warnings.
 
 **Configuration** — registry-driven defaults, user `settings.json`, workspace settings, live
 reload, `keybindings.json` with rebind-wins semantics, chord support with a pending-chord
@@ -100,7 +100,7 @@ kill/respawn, resize propagation, config-driven fonts, exit banners.
 ## Repository layout
 
 ```
-mini-vscode/
+0varflex/
 ├── src/
 │   ├── common/                 # shared: base (lifecycle, events, uri, ipc),
 │   │                           # platform (configuration, files, storage, log, window,
@@ -147,7 +147,7 @@ npm test             # bundle + run the unit tests (node's built-in runner, zero
 npx tsc --noEmit     # strict typecheck
 ```
 
-First run: the app creates `~/Library/Application Support/mini-vscode/` (its `settings.json`,
+First run: the app creates `~/Library/Application Support/0varflex/` (its `settings.json`,
 `keybindings.json`, `storage.json` and the extension-scan cache). The bundled samples under
 `extensions/` are scanned from the app directory — nothing to install.
 
@@ -200,7 +200,7 @@ Each commit is one exercise: implementation + tests + live acceptance + document
 | 11 | `extension host, API subset, sample extensions` | the utility-process host, `vscode` API shim, activation events |
 | 12 | `markers, suggest, hover and an LSP toy language` | providers ↔ LSP, diagnostics, the suggest/hover widgets, problems |
 | 13 | `pty host, flow-controlled terminal, xterm panel` | the pty process, batching + acks, xterm tabs, resize |
-| 14 | `packaged app, CLI, updates` | the production build gate, electron-builder, the `mini` CLI + single instance, About, the update loop |
+| 14 | `packaged app, CLI, updates` | the production build gate, electron-builder, the `0varflex` CLI + single instance, About, the update loop |
 
 (Exercise 00's primitives — lifecycle, events, URI, instantiation — landed in the first commit
 alongside 01.)
@@ -329,12 +329,12 @@ Four products, each ported in shape from the reference:
   Ad-hoc signing runs in electron-builder's `afterPack` hook so the ZIP carries the same
   signature as the installed app. `scripts/check-dist.mjs` asserts Info.plist ↔ product.json
   equality, the asar contents, the unpacked spawnables, the feed file and the signature.
-- **The `mini` CLI** — `resources/cli/mini` ports `code`'s symlink-chain `app_realpath`; the main
+- **The `0varflex` CLI** — `resources/cli/0varflex` ports `code`'s symlink-chain `app_realpath`; the main
   process owns the argv decision table (`common/platform/cli/common/cliArgs.ts`, unit-tested):
   `--open-folder` / `--open-file` / bare paths open as workspace or editor once ready, and a
   nonexistent path reports cleanly. A second launch forwards through
   `app.requestSingleInstanceLock()` + the `second-instance` event (the real CLI talks to the
-  running instance over a socket — delta). `Shell Command: Install 'mini' command in PATH`
+  running instance over a socket — delta). `Shell Command: Install '0varflex' command in PATH`
   symlinks into `/usr/local/bin` with a `~/bin` fallback ("install" state: this machine's
   `/usr/local/bin` needs admin rights, so `~/bin` is what the acceptance exercises).
 - **Updates + About** — `src/main/update/updateService.ts` keeps the reference's state-machine
@@ -366,7 +366,7 @@ Deltas specific to 14:
 
 - **Extensions**: no marketplace, install/update/disable UI, extension kinds, proposed APIs,
   menus/views contributions, telemetry or extension storage; a SINGLE extension host process per
-  window (`utilityProcess`, the port transferred from main). `engines.mini-vscode` is the only
+  window (`utilityProcess`, the port transferred from main). `engines.0varflex` is the only
   accepted engine — pointing the scanner at `~/.vscode/extensions` parses the manifests and
   skips them gracefully (real extensions would die on the API gaps; this is by design).
 - **Extension host internals**: the `vscode` module is injected by patching `Module._load`;
@@ -383,7 +383,7 @@ Deltas specific to 14:
   gets a status-bar warning whose click reloads after a confirmation (real VS Code keeps your
   version and offers a compare).
 - **Workspace**: a single folder, remembered by path in application storage (real: workspace
-  storage keyed by folder hash), workspace settings in `<folder>/.mini/settings.json` (real:
+  storage keyed by folder hash), workspace settings in `<folder>/.0varflex/settings.json` (real:
   `.vscode/settings.json`); no hot-exit, so open editors do not survive a relaunch.
 - **Explorer**: no multi-select, drag-drop move/copy, compact folders or icon themes; the inline
   input rejects `a/b` (real VS Code creates the intermediate folders).

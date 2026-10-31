@@ -39,13 +39,13 @@ automate:
    inert (that pairing is deliberate here).
 4. **Notarize** the artifacts (`notarytool` — the reference's pipeline does the equivalent):
    ```bash
-   xcrun notarytool submit dist/mini-vscode-<version>-arm64.zip \
+   xcrun notarytool submit dist/0varflex-<version>-arm64.zip \
        --apple-id <id> --team-id <TEAMID> --password <app-specific-password> --wait
-   xcrun stapler staple dist/mac-arm64/mini-vscode.app
+   xcrun stapler staple dist/mac-arm64/0varflex.app
    ```
    Only the zip needs notarizing for the updater; staple the .app too for first launches.
-5. **Verify**: `codesign --verify --deep --strict -vvv dist/mac-arm64/mini-vscode.app` and
-   `spctl --assess --type execute dist/mac-arm64/mini-vscode.app`.
+5. **Verify**: `codesign --verify --deep --strict -vvv dist/mac-arm64/0varflex.app` and
+   `spctl --assess --type execute dist/mac-arm64/0varflex.app`.
 
 ## Testing the update loop locally
 
@@ -54,8 +54,8 @@ electron-updater **refuses to update a dev run**: the loop must be exercised on 
 
 ```bash
 npm run dist                          # builds 1.0.0 (or whatever product.json says)
-ditto dist/mac-arm64/mini-vscode.app /Applications/mini-vscode.app
-open -a /Applications/mini-vscode.app # the installed copy to update
+ditto dist/mac-arm64/0varflex.app /Applications/0varflex.app
+open -a /Applications/0varflex.app # the installed copy to update
 
 # now make the next version:
 #   bump "version" in product.json (and package.json)
@@ -93,5 +93,5 @@ generic provider is exactly "a static server"; the reference's real feed is a CD
   `app.asar` → `app.asar.unpacked` in its own spawn-helper path, which corrupts a path that
   already contains `app.asar.unpacked`. It ships as an `extraResources` copy at
   `Contents/Resources/node_modules/node-pty`, where the pty host's require resolves it.
-- The CLI script (`resources/cli/mini`) ships via `extraResources` so it lives at
-  `Contents/Resources/cli/mini` — a real file the PATH symlink can point at.
+- The CLI script (`resources/cli/0varflex`) ships via `extraResources` so it lives at
+  `Contents/Resources/cli/0varflex` — a real file the PATH symlink can point at.

@@ -79,7 +79,7 @@ function watchSettingsFile(fileService: IFileService, resource: URI, callback: (
 
 // the demo document the editor opens with (exercise 08)
 const WELCOME_TEXT = [
-	'// mini-vscode — exercise 08: the editor view',
+	'// 0varflex — exercise 08: the editor view',
 	'const greeting = "hello, world";',
 	'',
 	'function main() {',
@@ -472,7 +472,7 @@ async function main(): Promise<void> {
 	// restore the last workspace folder (storage; the real one is workspace storage keyed by hash)
 	const storedFolder = storage.get('workbench.workspace.folder', StorageScope.APPLICATION);
 	if (argvFolder) {
-		// 14: a folder on the command line (`mini .`) wins over the remembered workspace
+		// 14: a folder on the command line (`0varflex .`) wins over the remembered workspace
 		logService.info(`argv folder wins over the stored workspace: ${argvFolder.path}`);
 	} else if (typeof storedFolder === 'string' && storedFolder.length > 0) {
 		if (await fileService.exists(URI.file(storedFolder))) {
@@ -530,7 +530,7 @@ async function main(): Promise<void> {
 	// 12: the provider registry resolves resource → languageId through 11's LanguageService
 	languageFeatures.setLanguageIdResolver(resource => languageService.languageIdForResource(resource));
 	const notifications = new NotificationService();
-	// 14: the shipping surface — About, the `mini` PATH install and the update loop's UI
+	// 14: the shipping surface — About, the `0varflex` PATH install and the update loop's UI
 	registerShippingActions(windowChannel, notifications, workbench.layout.statusbar);
 	const extensionService = new ExtensionService(logService);
 	const mainThreadServiceHost = {
@@ -574,7 +574,7 @@ async function main(): Promise<void> {
 			extensions: scanResult.extensions.map(entry => entry.description),
 			userDataPath,
 			logLevel: 'info',
-			env: { appName: 'mini-vscode', appVersion: windowInfo.appVersion }
+			env: { appName: '0varflex', appVersion: windowInfo.appVersion }
 		}
 	});
 

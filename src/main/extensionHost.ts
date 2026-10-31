@@ -14,6 +14,7 @@ import { promises as fs } from 'node:fs';
 import * as path from 'node:path';
 import { Emitter, Event } from '../common/base/common/event.js';
 import { MINI_EXT_HOST_CHANNEL } from '../common/base/parts/ipc/ipc.electron.js';
+import { unpackedPath } from './mainPaths.js';
 import { IExtensionScanResult, IScannerFileSystem, parseManifestCache, scanExtensions } from '../common/platform/extensions/common/extensionScanner.js';
 import type { ILogService } from '../common/platform/log/common/log.js';
 
@@ -48,7 +49,8 @@ export class ExtensionHostLauncher {
 		}
 
 		const { port1, port2 } = new MessageChannelMain();
-		const hostPath = path.join(app.getAppPath(), 'out', 'extHost.cjs');
+		// the bundle lives OUTSIDE the asar (asarUnpack): exec cannot read inside it
+		const hostPath = unpackedPath('out', 'extHost.cjs');
 		const child = utilityProcess.fork(hostPath, [], {
 			serviceName: 'mini-vscode extension host',
 			stdio: 'inherit'

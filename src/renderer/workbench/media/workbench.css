@@ -1340,3 +1340,40 @@ body {
 .terminal-xterm .xterm {
 	padding: 2px 0 0 2px;
 }
+
+/* ---- About dialog (14) ---- */
+
+.about-dialog {
+	min-width: 380px;
+}
+
+.about-title {
+	font-size: 18px;
+	font-weight: 600;
+	margin-bottom: 10px;
+	text-align: center;
+}
+
+.about-table {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	margin: 6px 0 12px;
+	font-size: 12px;
+}
+
+.about-row {
+	display: flex;
+	gap: 12px;
+}
+
+.about-key {
+	flex: 0 0 90px;
+	color: var(--mini-watermark-dim);
+	text-align: right;
+}
+
+.about-value {
+	flex: 1;
+	user-select: text;
+}

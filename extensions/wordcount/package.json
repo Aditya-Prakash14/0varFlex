@@ -3,7 +3,7 @@
 	"publisher": "mini",
 	"version": "1.0.0",
 	"engines": {
-		"mini-vscode": "^0.0.1"
+		"mini-vscode": "^1.0.0"
 	},
 	"main": "./out/extension.js",
 	"activationEvents": [

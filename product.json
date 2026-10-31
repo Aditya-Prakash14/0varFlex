@@ -1,0 +1,11 @@
+{
+	"nameShort": "mini-vscode",
+	"nameLong": "mini-vscode",
+	"applicationName": "mini",
+	"version": "1.0.1",
+	"commit": "4cc02a2",
+	"date": "2026-10-31",
+	"darwinBundleIdentifier": "com.minidev.minivscode",
+	"licenseName": "MIT",
+	"licenseUrl": "https://opensource.org/licenses/MIT"
+}

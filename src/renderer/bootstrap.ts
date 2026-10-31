@@ -10,6 +10,7 @@ import { ILogChannel } from '../common/platform/log/common/logIpc.js';
 import { FileServiceClient, IFileServiceWire } from '../common/platform/files/common/fileIpc.js';
 import type { IFileService } from '../common/platform/files/common/files.js';
 import { IWindowChannel } from '../common/platform/window/common/window.js';
+import type { IWindowCliPath } from '../common/platform/window/common/window.js';
 import { ConfigurationService } from '../common/platform/configuration/common/configurationService.js';
 import { IStorageService, StorageScope, WillSaveStateReason } from '../common/platform/storage/common/storage.js';
 import { BrowserStorageService } from '../common/platform/storage/common/storageService.js';
@@ -34,6 +35,7 @@ import { Workbench } from './workbench/browser/workbench.js';
 import { StatusbarAlignment } from './workbench/browser/parts/statusbar/statusbarPart.js';
 import { registerEditorActions } from './workbench/browser/parts/editor/editorActions.js';
 import { registerProblemsView } from './workbench/contrib/problems/browser/problemsView.js';
+import { registerShippingActions } from './workbench/contrib/shipping/browser/shippingActions.js';
 import { TerminalService } from './workbench/contrib/terminal/browser/terminalService.js';
 import { TerminalPanel } from './workbench/contrib/terminal/browser/terminalPanel.js';
 import { registerTerminalActions } from './workbench/contrib/terminal/browser/terminalActions.js';
@@ -350,13 +352,9 @@ async function main(): Promise<void> {
 	}, 500);
 
 	// ---- first real open paths (exercise 09): CLI argv seed, and the veto-able window close
-	const openedFile = await windowChannel.getOpenedFile();
-	if (openedFile) {
-		await editorService.openEditor({ resource: URI.file(openedFile) });
-		logService.info(`opened file from argv: ${openedFile}`);
-	} else {
-		logService.info('no file on argv — the editor part starts with its watermark');
-	}
+	// ---- 14: the CLI paths (files AND folders) + the second-instance forwards
+	const initialCliPaths = await windowChannel.getInitialPaths();
+	const argvFolder = initialCliPaths.find(entry => entry.kind === 'folder');
 
 	windowChannel.onWillCloseWindow(() => {
 		void (async () => {
@@ -473,7 +471,10 @@ async function main(): Promise<void> {
 
 	// restore the last workspace folder (storage; the real one is workspace storage keyed by hash)
 	const storedFolder = storage.get('workbench.workspace.folder', StorageScope.APPLICATION);
-	if (typeof storedFolder === 'string' && storedFolder.length > 0) {
+	if (argvFolder) {
+		// 14: a folder on the command line (`mini .`) wins over the remembered workspace
+		logService.info(`argv folder wins over the stored workspace: ${argvFolder.path}`);
+	} else if (typeof storedFolder === 'string' && storedFolder.length > 0) {
 		if (await fileService.exists(URI.file(storedFolder))) {
 			await setFolder(URI.file(storedFolder));
 		} else {
@@ -482,6 +483,33 @@ async function main(): Promise<void> {
 		}
 	}
 	updateWorkspaceUi();
+
+	// ---- 14: the CLI paths and their second-instance forwards (files open in editors, folders
+	// become the workspace; a nonexistent path reports cleanly and changes nothing)
+	const openCliPaths = async (paths: readonly IWindowCliPath[], from: string): Promise<void> => {
+		for (const entry of paths) {
+			if (entry.kind === 'folder') {
+				await setFolder(URI.file(entry.path));
+				logService.info(`${from}: opened folder ${entry.path}`);
+			} else if (entry.kind === 'file') {
+				await editorService.openEditor({ resource: URI.file(entry.path) });
+				logService.info(`${from}: opened file ${entry.path}`);
+			} else {
+				logService.warn(`${from}: path does not exist: ${entry.path}`);
+				void notifications.show({ severity: 'error', message: `The path does not exist: ${entry.path}` });
+			}
+		}
+		if (paths.length > 0) {
+			workbench.layout.editor.activeGroup.focus();
+		}
+	};
+
+	if (initialCliPaths.length > 0) {
+		await openCliPaths(initialCliPaths, 'argv');
+	} else {
+		logService.info('no path on argv — the editor part starts with its watermark');
+	}
+	windowChannel.onDidOpenPaths(paths => void openCliPaths(paths, 'second instance'));
 
 	// ---- the terminal (exercise 13): service + panel UI + actions. Nothing spawns until the
 	// panel first becomes visible (the ports open lazily on the first createProcess).
@@ -502,6 +530,8 @@ async function main(): Promise<void> {
 	// 12: the provider registry resolves resource → languageId through 11's LanguageService
 	languageFeatures.setLanguageIdResolver(resource => languageService.languageIdForResource(resource));
 	const notifications = new NotificationService();
+	// 14: the shipping surface — About, the `mini` PATH install and the update loop's UI
+	registerShippingActions(windowChannel, notifications, workbench.layout.statusbar);
 	const extensionService = new ExtensionService(logService);
 	const mainThreadServiceHost = {
 		logService,

@@ -1,0 +1,69 @@
+#!/usr/bin/env bash
+# resources/cli/mini — the `mini` shell launcher, ported from the real `code` CLI script
+# (resources/darwin/bin/code.sh): the symlink-chain resolution with the `.app` trim is the
+# brew-cask trick, so `mini` keeps working when a symlink points at it from anywhere.
+#
+# Differences from the real script (documented deltas):
+#   - the real one runs a node CLI that speaks to the running instance over a socket; ours
+#     launches the app binary and lets the SINGLE-INSTANCE lock forward the argv;
+#   - it launches detached (like the real CLI), so the prompt comes back immediately.
+
+set -e
+
+function app_realpath() {
+	SOURCE=$1
+	while [ -h "$SOURCE" ]; do
+		DIR=$(dirname "$SOURCE")
+		SOURCE=$(readlink "$SOURCE")
+		[[ $SOURCE != /* ]] && SOURCE=$DIR/$SOURCE
+	done
+	SOURCE_DIR="$( cd -P "$( dirname "$SOURCE" )" >/dev/null 2>&1 && pwd )"
+	echo "${SOURCE_DIR%%${SOURCE_DIR#*.app}}"
+}
+
+absolute() {
+	# resolve a relative path against the caller's cwd (the app runs with another cwd).
+	# A path whose parent does not exist cannot be resolved — pass it through so the app
+	# reports "does not exist" for the path the user actually typed.
+	case "$1" in
+		/*) echo "$1" ;;
+		*)
+			dir="$( cd -P "$( dirname "$1" )" >/dev/null 2>&1 && pwd )"
+			if [ -n "$dir" ]; then echo "$dir/$(basename "$1")"; else echo "$1"; fi
+			;;
+	esac
+}
+
+APP_PATH="$(app_realpath "${BASH_SOURCE[0]}")"
+if [ -z "$APP_PATH" ]; then
+	echo "Unable to determine the app path from ${BASH_SOURCE[0]}" >&2
+	exit 1
+fi
+
+CONTENTS="$APP_PATH/Contents"
+ELECTRON="$CONTENTS/MacOS/mini-vscode"
+
+if [ ! -x "$ELECTRON" ]; then
+	echo "Could not find the mini-vscode binary at $ELECTRON" >&2
+	exit 1
+fi
+
+# the tiny CLI decision table: directories become --open-folder, everything else --open-file
+args=()
+for arg in "$@"; do
+	case "$arg" in
+		-*) args+=("$arg") ;;
+		*)
+			arg="$(absolute "$arg")"
+			if [ -d "$arg" ]; then
+				args+=("--open-folder" "$arg")
+			else
+				args+=("--open-file" "$arg")
+			fi
+			;;
+	esac
+done
+
+# launch detached: the app keeps running after the terminal command returns
+("$ELECTRON" "${args[@]}" >/dev/null 2>&1 &)
+exit 0

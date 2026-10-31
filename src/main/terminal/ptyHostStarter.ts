@@ -8,9 +8,9 @@
 //     "restore terminals"; here the renderer lazily respawns on the next createTerminal.
 
 import { app, MessageChannelMain, utilityProcess, UtilityProcess, WebContents } from 'electron';
-import * as path from 'node:path';
 import { Emitter, Event } from '../../common/base/common/event.js';
 import { MINI_PTY_HOST_CHANNEL } from '../../common/base/parts/ipc/ipc.electron.js';
+import { unpackedPath } from '../mainPaths.js';
 
 export { MINI_PTY_HOST_CHANNEL };
 
@@ -38,7 +38,8 @@ export class PtyHostStarter {
 		}
 
 		const { port1, port2 } = new MessageChannelMain();
-		const hostPath = path.join(app.getAppPath(), 'out', 'ptyHost.cjs');
+		// the bundle lives OUTSIDE the asar (asarUnpack): exec cannot read inside it
+		const hostPath = unpackedPath('out', 'ptyHost.cjs');
 		const child = utilityProcess.fork(hostPath, [], {
 			serviceName: 'mini-vscode pty host',
 			stdio: 'inherit',

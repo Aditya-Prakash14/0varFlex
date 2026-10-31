@@ -17,7 +17,11 @@ export async function activate(context: {
 	extensionPath: string;
 	subscriptions: { dispose(): void }[];
 }): Promise<void> {
-	const serverPath = path.join(context.extensionPath, 'out', 'server.js');
+	const bundledServerPath = path.join(context.extensionPath, 'out', 'server.js');
+	// packaged: the extension lives inside app.asar, but the server must be SPAWNED — exec
+	// cannot read from an asar, so the bundle ships unpacked (asarUnpack in the builder config)
+	// and this maps the path there (a no-op in dev, where there is no app.asar component)
+	const serverPath = bundledServerPath.replace(`app.asar${path.sep}`, `app.asar.unpacked${path.sep}`);
 	const lsp = new LspClient({
 		serverPath,
 		// the ported convention: a stable prefix so the output channel reads as one story

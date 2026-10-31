@@ -200,6 +200,7 @@ Each commit is one exercise: implementation + tests + live acceptance + document
 | 11 | `extension host, API subset, sample extensions` | the utility-process host, `vscode` API shim, activation events |
 | 12 | `markers, suggest, hover and an LSP toy language` | providers ↔ LSP, diagnostics, the suggest/hover widgets, problems |
 | 13 | `pty host, flow-controlled terminal, xterm panel` | the pty process, batching + acks, xterm tabs, resize |
+| 14 | `packaged app, CLI, updates` | the production build gate, electron-builder, the `mini` CLI + single instance, About, the update loop |
 
 (Exercise 00's primitives — lifecycle, events, URI, instantiation — landed in the first commit
 alongside 01.)
@@ -311,6 +312,55 @@ Deltas specific to 13:
 - node-pty is native: esbuild keeps it external (`out/ptyHost.cjs` requires it from
   `node_modules`) and `scripts/build.mjs` re-applies `+x` to its `spawn-helper` (some npm
   installs skip the postinstall — without it every spawn fails with `posix_spawnp failed`).
+
+## Shipping (14): packaged app, CLI, updates
+
+Four products, each ported in shape from the reference:
+
+- **Production build** — `scripts/build.mjs --production` minifies, drops sourcemaps, defines
+  `process.env.NODE_ENV`, and gates the result: per-entry bundles only, per-bundle size caps and
+  a marker table asserting nothing crosses lanes (no xterm in main, no `node-pty` outside the
+  pty host, `require("node-pty")` stays external). The metafile lands in `out/build-meta.json`.
+  A `createRequire` banner gives the ESM main bundle a real `require` for the bundled CJS
+  updater — without it the updater dies with "Dynamic require of 'fs' is not supported".
+- **The bundle** — `electron-builder.config.cjs` + `scripts/dist.mjs`: an explicit asar
+  allowlist, `dmg` + `zip` (the updater consumes the zip + `latest-mac.yml`), and the generic
+  publish feed at `http://localhost:8123` (`scripts/updates-server.mjs` serves `dist/`).
+  Ad-hoc signing runs in electron-builder's `afterPack` hook so the ZIP carries the same
+  signature as the installed app. `scripts/check-dist.mjs` asserts Info.plist ↔ product.json
+  equality, the asar contents, the unpacked spawnables, the feed file and the signature.
+- **The `mini` CLI** — `resources/cli/mini` ports `code`'s symlink-chain `app_realpath`; the main
+  process owns the argv decision table (`common/platform/cli/common/cliArgs.ts`, unit-tested):
+  `--open-folder` / `--open-file` / bare paths open as workspace or editor once ready, and a
+  nonexistent path reports cleanly. A second launch forwards through
+  `app.requestSingleInstanceLock()` + the `second-instance` event (the real CLI talks to the
+  running instance over a socket — delta). `Shell Command: Install 'mini' command in PATH`
+  symlinks into `/usr/local/bin` with a `~/bin` fallback ("install" state: this machine's
+  `/usr/local/bin` needs admin rights, so `~/bin` is what the acceptance exercises).
+- **Updates + About** — `src/main/update/updateService.ts` keeps the reference's state-machine
+  vocabulary (idle → checking → available → downloading → ready → updating), checks on a 30s
+  timer and on demand (`workbench.action.checkForUpdates`), and surfaces "Update available: vX"
+  as 11's toast with a "Restart to Update" action plus a status-bar `⇧ restart to update` entry
+  (the real release badges the gear — delta). `workbench.action.showAboutDialog` opens an HTML
+  modal with product.json + runtime versions; Copy goes through the main process clipboard so
+  it works without a trusted user gesture. A pre-window startup failure shows a native
+  `Copy Error` dialog (the reference's startup-error path).
+
+Deltas specific to 14:
+
+- **Ad-hoc signatures cannot auto-update on macOS.** Squirrel.Mac derives its requirement from
+  the running app's code signature — for an ad-hoc signature that requirement is the app's
+  cdhash, which no rebuilt bundle can satisfy. The service detects an ad-hoc signature and, on
+  "Restart", installs the already-downloaded zip locally (a detached script waits for the exit,
+  swaps the bundle, relaunches with the original argv). A Developer-ID-signed build takes the
+  normal `quitAndInstall` path; the user-visible flow is identical. `build/README.md` carries
+  the full signing story.
+- node-pty ships OUTSIDE the asar as an extraResource: its own asar workaround rewrites
+  `app.asar` → `app.asar.unpacked`, which corrupts a path that already contains
+  `app.asar.unpacked` — a packaged pty host fails with `posix_spawnp failed` otherwise.
+- The CLI is mac-only (no Windows `.cmd` launcher), no portable mode, no universal/x64 or
+  Windows/Linux artifacts, no notarization pipeline, no update-server signing or staged
+  rollouts (all listed again in `build/README.md`).
 
 ## Known deltas worth knowing before extending
 

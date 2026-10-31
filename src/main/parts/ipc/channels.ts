@@ -1,6 +1,9 @@
 // src/main/parts/ipc/channels.ts — the main-side channel implementations: log, file, window.
 
-import { app, BrowserWindow, dialog, shell } from 'electron';
+import { app, BrowserWindow, clipboard, dialog, shell } from 'electron';
+import * as fs from 'node:fs';
+import * as os from 'node:os';
+import * as path from 'node:path';
 import { Emitter, Event } from '../../../common/base/common/event.js';
 import { DisposableStore, toDisposable } from '../../../common/base/common/lifecycle.js';
 import { ChannelServer, ProxyChannel } from '../../../common/base/parts/ipc/ipc.js';
@@ -8,8 +11,9 @@ import { ILogChannel } from '../../../common/platform/log/common/logIpc.js';
 import { LogLevel } from '../../../common/platform/log/common/log.js';
 import { FileService } from '../../../common/platform/files/common/fileService.js';
 import { createFileServiceWire, IFileServiceWire } from '../../../common/platform/files/common/fileIpc.js';
-import { IWindowChannel, IWindowInfo, WindowMenuCommand } from '../../../common/platform/window/common/window.js';
+import { IInstallCommandResult, IUpdateStateDto, IVersionInfo, IWindowChannel, IWindowCliPath, IWindowInfo, WindowMenuCommand } from '../../../common/platform/window/common/window.js';
 import { ExtensionHostLauncher, scanExtensionsMain } from '../../extensionHost.js';
+import type { IUpdateService } from '../../update/updateService.js';
 import { PtyHostStarter } from '../../terminal/ptyHostStarter.js';
 import type { ILogService } from '../../../common/platform/log/common/log.js';
 import type { IExtensionScanResult } from '../../../common/platform/extensions/common/extensionScanner.js';
@@ -38,16 +42,19 @@ class WindowChannelService implements IWindowChannel {
 	private readonly _onMenuCommand = new Emitter<WindowMenuCommand>();
 	private readonly _onDidChangeFullScreen = new Emitter<boolean>();
 	private readonly _onWillCloseWindow = new Emitter<void>();
+	/** 14: a second `mini` launch forwarded its argv (single-instance) */
+	private readonly _onDidOpenPaths = new Emitter<readonly IWindowCliPath[]>();
 
 	/** set once the renderer allowed the close (or the watchdog did) */
 	private _closeAllowed = false;
 	private _closeWatchdog: ReturnType<typeof setTimeout> | undefined;
 
-	constructor(private readonly _window: BrowserWindow, store: DisposableStore, private readonly _openedFile: string | null, private readonly _logService: ILogService) {
+	constructor(private readonly _window: BrowserWindow, store: DisposableStore, private readonly _initialPaths: readonly IWindowCliPath[], private readonly _updateService: IUpdateService, private readonly _logService: ILogService) {
 		store.add(toDisposable(() => this._onDidChangeFocus.dispose()));
 		store.add(toDisposable(() => this._onMenuCommand.dispose()));
 		store.add(toDisposable(() => this._onDidChangeFullScreen.dispose()));
 		store.add(toDisposable(() => this._onWillCloseWindow.dispose()));
+		store.add(toDisposable(() => this._onDidOpenPaths.dispose()));
 		store.add(toDisposable(() => {
 			if (this._closeWatchdog !== undefined) {
 				clearTimeout(this._closeWatchdog);
@@ -171,7 +178,116 @@ class WindowChannelService implements IWindowChannel {
 	}
 
 	async getOpenedFile(): Promise<string | null> {
-		return this._openedFile;
+		// 14: derived from the CLI paths — the first real file wins (folders travel separately)
+		return this._initialPaths.find(entry => entry.kind === 'file')?.path ?? null;
+	}
+
+	async getInitialPaths(): Promise<readonly IWindowCliPath[]> {
+		return this._initialPaths;
+	}
+
+	get onDidOpenPaths(): Event<readonly IWindowCliPath[]> {
+		return this._onDidOpenPaths.event;
+	}
+
+	/** the single-instance handler in main calls this to forward a second launch's argv */
+	forwardPaths(paths: readonly IWindowCliPath[]): void {
+		if (paths.length > 0) {
+			this._onDidOpenPaths.fire(paths);
+		}
+	}
+
+	/**
+	 * `Shell Command: Install 'mini' command in PATH` — the real action symlinks the launcher
+	 * into /usr/local/bin and falls back to ~/bin (ported shape: try the PATH dir, then HOME).
+	 */
+	async installShellCommand(): Promise<IInstallCommandResult> {
+		const scriptPath = app.isPackaged
+			? path.join(process.resourcesPath, 'cli', 'mini')
+			: path.join(app.getAppPath(), 'resources', 'cli', 'mini');
+
+		if (!fs.existsSync(scriptPath)) {
+			return { ok: false, error: `the CLI script is missing: ${scriptPath}` };
+		}
+		fs.chmodSync(scriptPath, 0o755);
+
+		const candidates = ['/usr/local/bin', path.join(os.homedir(), 'bin')];
+		for (const directory of candidates) {
+			try {
+				if (directory === candidates[1]) {
+					fs.mkdirSync(directory, { recursive: true });
+				}
+				// a directory we cannot write is not a failure: try the fallback
+				fs.accessSync(directory, fs.constants.W_OK);
+			} catch {
+				continue;
+			}
+			const target = path.join(directory, 'mini');
+			try {
+				if (fs.lstatSync(target)) {
+					// something is already there: ours (same symlink) is idempotent success,
+					// anything else gets replaced (the real installer replaces its own symlink)
+					const existing = fs.lstatSync(target);
+					if (existing.isSymbolicLink() && fs.readlinkSync(target) === scriptPath) {
+						return { ok: true, target };
+					}
+				 	fs.unlinkSync(target);
+				}
+			} catch {
+				// not existing: fine
+			}
+			try {
+				fs.symlinkSync(scriptPath, target);
+				return { ok: true, target };
+			} catch (error) {
+				const message = (error as NodeJS.ErrnoException).code === 'EACCES'
+					? `no permission to write ${target} — try running with suitable permissions`
+					: (error as Error).message;
+				return { ok: false, error: message };
+			}
+		}
+		return { ok: false, error: `no writable directory among ${candidates.join(', ')}` };
+	}
+
+	// ---- the About dialog's version list (14): product.json + the runtime's own versions
+
+	async getVersionInfo(): Promise<IVersionInfo> {
+		const product = readProduct();
+		return {
+			nameShort: product.nameShort,
+			version: product.version,
+			commit: product.commit || 'unknown',
+			date: product.date || 'unknown',
+			electron: process.versions.electron ?? 'unknown',
+			chromium: process.versions.chrome ?? 'unknown',
+			node: process.versions.node ?? 'unknown',
+			v8: process.versions.v8 ?? 'unknown',
+			os: `${os.type()} ${os.release()} (${os.arch()})`
+		};
+	}
+
+	/** 14: the About dialog's Copy — the main process owns the clipboard (a synthetic click in
+	 * the renderer has no trusted user gesture, so navigator.clipboard refuses there). */
+	async writeClipboardText(text: string): Promise<void> {
+		clipboard.writeText(text);
+	}
+
+	// ---- the update loop (14): the service lives in main, the renderer drives the UI
+
+	async getUpdateState(): Promise<IUpdateStateDto> {
+		return this._updateService.state;
+	}
+
+	get onDidChangeUpdateState(): Event<IUpdateStateDto> {
+		return this._updateService.onDidChangeState;
+	}
+
+	async checkForUpdates(explicit: boolean): Promise<IUpdateStateDto> {
+		return this._updateService.checkForUpdates(explicit);
+	}
+
+	async restartToUpdate(): Promise<void> {
+		this._updateService.restartToUpdate();
 	}
 
 	async getUserDataPath(): Promise<string> {
@@ -221,7 +337,32 @@ export function sendMenuCommand(command: WindowMenuCommand): void {
 	windowServices.get(window.id)?.fireMenuCommand(command);
 }
 
-export function registerChannels(window: BrowserWindow, server: ChannelServer<IWindowContext>, store: DisposableStore, storage: StorageMainService, fileService: FileService, openedFile: string | null, logService: ILogService): void {
+/** 14: a second `mini` launch forwards its argv into the (single) window's renderer. */
+export function sendPathsToWindow(paths: readonly IWindowCliPath[]): void {
+	const window = BrowserWindow.getAllWindows()[0];
+	if (!window) {
+		return;
+	}
+	windowServices.get(window.id)?.forwardPaths(paths);
+}
+
+/** 14: product.json next to the app code (inside the asar when packaged — fs reads are patched). */
+let cachedProduct: { nameShort: string; version: string; commit?: string; date?: string } | undefined;
+function readProduct(): { nameShort: string; version: string; commit?: string; date?: string } {
+	if (cachedProduct) {
+		return cachedProduct;
+	}
+	try {
+		const text = fs.readFileSync(path.join(app.getAppPath(), 'product.json'), 'utf8');
+		const parsed = JSON.parse(text) as { nameShort?: string; version?: string; commit?: string; date?: string };
+		cachedProduct = { nameShort: parsed.nameShort ?? 'mini-vscode', version: parsed.version ?? app.getVersion(), commit: parsed.commit, date: parsed.date };
+	} catch {
+		cachedProduct = { nameShort: 'mini-vscode', version: app.getVersion() };
+	}
+	return cachedProduct;
+}
+
+export function registerChannels(window: BrowserWindow, server: ChannelServer<IWindowContext>, store: DisposableStore, storage: StorageMainService, fileService: FileService, initialPaths: readonly IWindowCliPath[], updateService: IUpdateService, logService: ILogService): void {
 	server.registerChannel('log', ProxyChannel.fromService<IWindowContext>(new LogChannel(), store));
 	// 10: ONE `file` channel replaces 02's hand-written fileIO channel — the FileService runs in
 	// main (disk provider + watcher) and the renderer gets the proxied wire shape
@@ -229,7 +370,7 @@ export function registerChannels(window: BrowserWindow, server: ChannelServer<IW
 	const fileWire = createFileServiceWire(fileService);
 	store.add(toDisposable(() => fileWire.dispose()));
 	server.registerChannel('file', ProxyChannel.fromService<IWindowContext>(fileWire.service, store));
-	server.registerChannel('window', ProxyChannel.fromService<IWindowContext>(new WindowChannelService(window, store, openedFile, logService), store));
+	server.registerChannel('window', ProxyChannel.fromService<IWindowContext>(new WindowChannelService(window, store, initialPaths, updateService, logService), store));
 	// storage is app-level (not per window), but it rides the window's channel server
 	server.registerChannel('storage', storage);
 }

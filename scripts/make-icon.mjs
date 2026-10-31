@@ -1,10 +1,12 @@
-// scripts/make-icon.mjs — draws the app icon from scratch (no image libraries): a rounded
-// square in the workbench accent with the terminal-prompt glyph ">_", rendered at 2x and
-// downsampled for anti-aliasing, encoded as PNG by hand (zlib + a CRC32), then converted into
-// an .icns iconset with the macOS tools (sips + iconutil).
+// scripts/make-icon.mjs — draws the app icon from scratch (no image libraries), then converts it
+// into an .icns with the macOS tools (sips + iconutil). The design:
 //
-// The real VS Code ships icon sets per platform (resources/darwin/code.icns etc.); this is the
-// same artifact, generated instead of checked in.
+//   "the slashed zero" — a black squircle carrying a bold silver 0 cut by a diagonal slash: the
+//   programmer's zero (never an O), monochrome by design (grays and black only), with a hairline
+//   edge and a soft halo so it holds up on dark docks.
+//
+// Rendered at 2x and downsampled for anti-aliasing; encoded as PNG by hand (zlib + a CRC32).
+// Regenerated on every `npm run dist` (deterministic), so it is not checked in.
 
 import { deflateSync } from 'node:zlib';
 import { execFileSync } from 'node:child_process';
@@ -19,77 +21,87 @@ const SIZE = 1024;
 const SCALE = 2;                 // supersample, then average down
 const W = SIZE * SCALE;
 
-// ---- the drawing (all in device pixels of the supersampled canvas)
+// ---- the design (all values in 1024-space; Apple's icon grid: 824 tile, r ≈ 185)
 
-const MARGIN = 96 * SCALE;       // ~9% padding, like macOS icons expect
-const RADIUS = 180 * SCALE;
-const TILE = { r: 0x00, g: 0x78, b: 0xd4 };   // the workbench accent (--mini-accent)
-const GLYPH = { r: 0xff, g: 0xff, b: 0xff };
+const CENTER = 512;
+const TILE_MARGIN = 100;                 // the rounded tile
+const TILE_RADIUS = 185;
+const TILE_MIN = TILE_MARGIN;
+const TILE_MAX = SIZE - TILE_MARGIN;
 
-const TILE_MIN = MARGIN;
-const TILE_MAX = W - MARGIN;
+const TILE_TOP = { r: 0x18, g: 0x18, b: 0x18 };   // near-black, a hint of a vertical gradient
+const TILE_BOTTOM = { r: 0x06, g: 0x06, b: 0x06 };
+const TILE_EDGE = { r: 0x2d, g: 0x2d, b: 0x2d };    // hairline border: definition on black docks
+const EDGE_WIDTH = 3;
+const HALO = { r: 0x2a, g: 0x2a, b: 0x2a };       // soft halo around the mark
+const HALO_WIDTH = 36;
 
-function inRoundedRect(x, y) {
-	if (x < TILE_MIN || x >= TILE_MAX || y < TILE_MIN || y >= TILE_MAX) {
-		return false;
-	}
-	// corner circles
-	const cx = x < TILE_MIN + RADIUS ? TILE_MIN + RADIUS : x >= TILE_MAX - RADIUS ? TILE_MAX - RADIUS : x;
-	const cy = y < TILE_MIN + RADIUS ? TILE_MIN + RADIUS : y >= TILE_MAX - RADIUS ? TILE_MAX - RADIUS : y;
-	if ((cx === x && cy === y) || (cx === x && y >= TILE_MIN + RADIUS && y < TILE_MAX - RADIUS) || (cy === y && x >= TILE_MIN + RADIUS && x < TILE_MAX - RADIUS)) {
-		return true;
-	}
-	const dx = x - cx;
-	const dy = y - cy;
-	return dx * dx + dy * dy <= RADIUS * RADIUS;
+const RING_RADIUS = 216;                 // the 0's centreline radius
+const STROKE = 100;                      // stroke width
+const RING_TOP = { r: 0xe8, g: 0xe8, b: 0xe8 };   // silver, light from above
+const RING_BOTTOM = { r: 0x84, g: 0x84, b: 0x84 };
+const SLASH_WIDTH = 60;                  // the cut: the programmer's zero treatment
+const SLASH_LENGTH = 320;                // reaches past the ring on both sides
+
+const mix = (a, b, t) => ({ r: a.r + (b.r - a.r) * t, g: a.g + (b.g - a.g) * t, b: a.b + (b.b - a.b) * t });
+
+/** signed distance to the tile's rounded rect (negative inside) */
+function tileDistance(x, y) {
+	const half = (TILE_MAX - TILE_MIN) / 2;
+	const dx = Math.abs(x - CENTER) - (half - TILE_RADIUS);
+	const dy = Math.abs(y - CENTER) - (half - TILE_RADIUS);
+	const outside = Math.hypot(Math.max(dx, 0), Math.max(dy, 0));
+	return outside + Math.min(Math.max(dx, dy), 0) - TILE_RADIUS;
 }
 
-/** thick line segment (distance to segment < half width) */
-function onSegment(x, y, x1, y1, x2, y2, width) {
-	const half = width / 2;
-	const dx = x2 - x1;
-	const dy = y2 - y1;
-	const lengthSq = dx * dx + dy * dy;
-	const t = Math.max(0, Math.min(1, ((x - x1) * dx + (y - y1) * dy) / lengthSq));
-	const px = x1 + t * dx;
-	const py = y1 + t * dy;
-	const ddx = x - px;
-	const ddy = y - py;
-	return ddx * ddx + ddy * ddy <= half * half;
+/** distance to the slash segment (negative = inside the cut) */
+function slashDistance(x, y) {
+	const dx = SLASH_LENGTH * Math.SQRT1_2;      // 45°, from bottom-left to top-right
+	const x1 = CENTER - dx;
+	const y1 = CENTER + dx;
+	const x2 = CENTER + dx;
+	const y2 = CENTER - dx;
+	const t = Math.max(0, Math.min(1, ((x - x1) * (x2 - x1) + (y - y1) * (y2 - y1)) / ((x2 - x1) ** 2 + (y2 - y1) ** 2)));
+	return Math.hypot(x - (x1 + t * (x2 - x1)), y - (y1 + t * (y2 - y1))) - SLASH_WIDTH / 2;
 }
 
-// the glyph: ">" (two strokes) + "_" (a bar), centred in the tile
-const s = SCALE;
-const GLYPH_WIDTH = 84 * s;
-const segments = [
-	[250 * s, 316 * s, 520 * s, 512 * s],
-	[520 * s, 512 * s, 250 * s, 708 * s],
-	[590 * s, 708 * s, 790 * s, 708 * s]
-];
-
+/** the icon's colour at a design-space point, or null for transparent */
 function sample(x, y) {
-	if (!inRoundedRect(x, y)) {
-		return null; // transparent
+	if (tileDistance(x, y) > 0) {
+		return null; // outside the tile
 	}
-	for (const [x1, y1, x2, y2] of segments) {
-		if (onSegment(x, y, x1, y1, x2, y2, GLYPH_WIDTH)) {
-			return GLYPH;
-		}
+	const base = mix(TILE_TOP, TILE_BOTTOM, Math.min(1, Math.max(0, (y - TILE_MIN) / (TILE_MAX - TILE_MIN))));
+	if (tileDistance(x, y) > -EDGE_WIDTH) {
+		return mix(base, TILE_EDGE, 0.85); // the hairline edge
 	}
-	return TILE;
+
+	// the slash cuts through both the ring and its halo: a clean black gap
+	if (slashDistance(x, y) < 0) {
+		return base;
+	}
+
+	const distance = Math.hypot(x - CENTER, y - CENTER);
+	const ringDistance = Math.abs(distance - RING_RADIUS) - STROKE / 2;
+	if (ringDistance < 0) {
+		return mix(RING_TOP, RING_BOTTOM, Math.min(1, Math.max(0, (y - (CENTER - RING_RADIUS)) / (2 * RING_RADIUS))));
+	}
+	if (ringDistance < HALO_WIDTH) {
+		return mix(base, HALO, 0.5 * (1 - ringDistance / HALO_WIDTH));
+	}
+	return base;
 }
 
 // ---- rasterize (supersampled) + downsample
 
 const big = new Uint8Array(W * W * 4);
-for (let y = 0; y < W; y++) {
-	for (let x = 0; x < W; x++) {
-		const colour = sample(x, y);
-		const offset = (y * W + x) * 4;
+for (let py = 0; py < W; py++) {
+	for (let px = 0; px < W; px++) {
+		const colour = sample((px + 0.5) / SCALE, (py + 0.5) / SCALE);
 		if (colour) {
-			big[offset] = colour.r;
-			big[offset + 1] = colour.g;
-			big[offset + 2] = colour.b;
+			const offset = (py * W + px) * 4;
+			big[offset] = Math.round(colour.r);
+			big[offset + 1] = Math.round(colour.g);
+			big[offset + 2] = Math.round(colour.b);
 			big[offset + 3] = 255;
 		}
 	}
@@ -174,7 +186,7 @@ function encodePng(width, height, pixels) {
 mkdirSync(buildDir, { recursive: true });
 const pngPath = path.join(buildDir, 'icon.png');
 writeFileSync(pngPath, encodePng(SIZE, SIZE, rgba));
-console.log(`icon: wrote ${path.relative(root, pngPath)} (${SIZE}x${SIZE})`);
+console.log(`icon: wrote ${path.relative(root, pngPath)} (${SIZE}x${SIZE}) — the slashed zero`);
 
 // ---- iconset → icns (sips + iconutil; both ship with macOS)
 

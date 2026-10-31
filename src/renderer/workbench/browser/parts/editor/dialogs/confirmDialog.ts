@@ -16,8 +16,8 @@ export interface IConfirmDialogOptions {
 	readonly detail?: string;
 	/** default: Save */
 	readonly primaryLabel?: string;
-	/** default: Don't Save */
-	readonly secondaryLabel?: string;
+	/** default: "Don't Save"; pass null to hide the button (two-button dialogs) */
+	readonly secondaryLabel?: string | null;
 	/** default: Cancel */
 	readonly cancelLabel?: string;
 }
@@ -59,7 +59,9 @@ export function confirmDialog(options: IConfirmDialogOptions): Promise<ConfirmDi
 		};
 
 		const primary = makeButton(options.primaryLabel ?? 'Save', 'primary', 'primary');
-		makeButton(options.secondaryLabel ?? 'Don\'t Save', 'secondary', 'secondary');
+		if (options.secondaryLabel !== null) {
+			makeButton(options.secondaryLabel ?? 'Don\'t Save', 'secondary', 'secondary');
+		}
 		makeButton(options.cancelLabel ?? 'Cancel', 'cancel', 'cancel');
 
 		const disposables: IDisposable[] = [];

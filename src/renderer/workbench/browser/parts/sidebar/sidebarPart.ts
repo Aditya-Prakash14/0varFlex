@@ -17,13 +17,22 @@ export class SidebarPart extends Part {
 	override get minimumHeight(): number { return 0; }
 	override get maximumHeight(): number { return Number.POSITIVE_INFINITY; }
 
+	/** the Explorer view (10) mounts into this */
+	getContentContainer(): HTMLElement | undefined {
+		return this.contentArea;
+	}
+
+	setTitle(title: string): void {
+		if (this.titleArea) {
+			this.titleArea.textContent = title;
+		}
+	}
+
 	protected override createTitleArea(parent: HTMLElement): HTMLElement {
 		return append(parent, $('.sidebar-header', {}, 'EXPLORER'));
 	}
 
 	protected override createContentArea(parent: HTMLElement): HTMLElement {
-		return append(parent, $('.sidebar-content', {},
-			$('.sidebar-placeholder', {}, 'No folder opened — the Explorer arrives in exercise 10')
-		));
+		return append(parent, $('.sidebar-content'));
 	}
 }

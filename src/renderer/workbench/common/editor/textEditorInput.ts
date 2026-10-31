@@ -7,7 +7,7 @@
 
 import { IDisposable } from '../../../../common/base/common/lifecycle.js';
 import { URI } from '../../../../common/base/common/uri.js';
-import type { IFileIOChannel } from '../../../../common/platform/fileIO/common/fileIO.js';
+import type { IFileService } from '../../../../common/platform/files/common/files.js';
 import { TextModel } from '../../../../common/editor/common/model/textModel.js';
 import { CodeEditorService } from '../../services/editor/browser/codeEditorService.js';
 import { EditorInput } from './editorInput.js';
@@ -33,18 +33,27 @@ export type TextEditorPaneFactory = (input: TextEditorInput, model: TextModel) =
 
 export class TextEditorInput extends EditorInput {
 
+	/** mutable for 10's rename remap; everything else treats it as identity */
+	resource: URI;
+
 	private _model: TextModel | null = null;
 	private _modelListener: IDisposable | null = null;
 	private _lastDirty = false;
 
 	constructor(
-		readonly resource: URI,
-		private readonly _fileIO: IFileIOChannel,
+		resource: URI,
+		private readonly _fileService: IFileService,
 		private readonly _codeEditorService: CodeEditorService,
 		private readonly _paneFactory: TextEditorPaneFactory
 	) {
 		super();
+		this.resource = resource;
 		this._register({ dispose: () => this._modelListener?.dispose() });
+	}
+
+	/** 10: renames re-point the input at the new resource (the model object is kept) */
+	updateResource(resource: URI): void {
+		this.resource = resource;
 	}
 
 	getTypeId(): string {
@@ -83,9 +92,11 @@ export class TextEditorInput extends EditorInput {
 		if (existing) {
 			this._model = existing;
 		} else {
-			const text = await this._fileIO.readTextFile(this.resource.fsPath);
-			if (text === null) {
-				throw new Error(`Unable to open ${this.resource.fsPath}: file not found`);
+			let text: string;
+			try {
+				text = await this._fileService.readFile(this.resource);
+			} catch (error) {
+				throw new Error(`Unable to open ${this.resource.fsPath}: ${(error as Error).message}`);
 			}
 			this._model = this._codeEditorService.createModel(this.resource, text);
 		}
@@ -109,7 +120,8 @@ export class TextEditorInput extends EditorInput {
 		// keystroke after save would leave the model dirty (07's edit stack contract)
 		model.pushStackElement();
 		const text = model.getValue();
-		await this._fileIO.writeTextFile(this.resource.fsPath, text);
+		// atomic: write a temp sibling, fsync, rename over the target (10's disk provider)
+		await this._fileService.writeFile(this.resource, text, { atomic: true });
 		model.setSavedVersionId();
 		this._refreshDirty();
 		return true;
@@ -121,9 +133,11 @@ export class TextEditorInput extends EditorInput {
 	 * course's accepted delta).
 	 */
 	override async revert(): Promise<void> {
-		const text = await this._fileIO.readTextFile(this.resource.fsPath);
-		if (text === null) {
-			return;
+		let text: string;
+		try {
+			text = await this._fileService.readFile(this.resource);
+		} catch {
+			return; // deleted on disk: nothing to revert to (10 keeps the buffer + strikethrough)
 		}
 		const model = await this._ensureModel();
 		model.revertTo(text);

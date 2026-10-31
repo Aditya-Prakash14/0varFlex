@@ -43,6 +43,17 @@ export class CodeEditorService extends Disposable {
 		}
 	}
 
+	/** 10: renames re-key the registry without touching the model object (panes keep working) */
+	moveModel(from: URI, to: URI): TextModel | undefined {
+		const entry = this._models.get(from.toString());
+		if (!entry) {
+			return undefined;
+		}
+		this._models.delete(from.toString());
+		this._models.set(to.toString(), entry);
+		return entry.model;
+	}
+
 	/** a pane stopped showing the model: at zero refs the model is disposed and dropped */
 	release(uri: URI): void {
 		const key = uri.toString();

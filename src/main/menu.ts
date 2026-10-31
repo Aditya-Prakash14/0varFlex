@@ -13,6 +13,26 @@ export function installMenu(): void {
 
 	const template: MenuItemConstructorOptions[] = [
 		...(isMac ? [{ role: 'appMenu' as const }] : []),
+		{
+			label: 'File',
+			submenu: [
+				{
+					label: 'Open Folder…',
+					click: () => sendMenuCommand('openFolder')
+				},
+				{ type: 'separator' },
+				{
+					label: 'Open Sample File',
+					click: () => sendMenuCommand('openSampleFile')
+				},
+				{ type: 'separator' },
+				// no accelerator on purpose: Cmd+S belongs to the editor's save command
+				{
+					label: 'Close Window',
+					click: () => BrowserWindow.getFocusedWindow()?.close()
+				}
+			]
+		},
 		{ role: 'editMenu' },
 		{
 			label: 'View',

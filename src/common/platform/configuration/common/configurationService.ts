@@ -1,15 +1,19 @@
-// src/common/platform/configuration/common/configurationService.ts — defaults ∪ user settings,
-// live reload, surgical JSONC writes.
+// src/common/platform/configuration/common/configurationService.ts — defaults ∪ user settings ∪
+// workspace settings, live reload, surgical JSONC writes.
 //
 // Behaviors ported from vs/workbench/services/configuration/common/configurations.ts:
 //  - invalid JSON: errors are reported with line info and the LAST GOOD model stays active
 //  - updateValue edits the file formatting-preservingly (jsonc-parser modify + applyEdits)
 //  - a `lastKnownDiskValue` guard keeps our own writes from re-triggering the watcher
+//  - 10 adds the WORKSPACE layer: DEFAULT < USER < WORKSPACE (real precedence)
+//
+// delta: the workspace layer reads `<folder>/.mini/settings.json` (see workspace.ts)
 
 import { applyEdits, findNodeAtLocation, modify, parse as parseJsonc, parseTree, ParseError, printParseErrorCode } from 'jsonc-parser';
 import { Emitter, Event } from '../../../base/common/event.js';
 import { Disposable } from '../../../base/common/lifecycle.js';
-import type { IFileIOChannel } from '../../fileIO/common/fileIO.js';
+import { URI } from '../../../base/common/uri.js';
+import type { IFileService } from '../../files/common/files.js';
 import type { ILogService } from '../../log/common/log.js';
 import { ConfigurationTarget, ConfigurationTargetToString, IConfigurationChangeEvent, IConfigurationService, IInspectValue, toValuesTree } from './configuration.js';
 import { ConfigurationChangeEvent, ConfigurationModel } from './configurationModels.js';
@@ -31,24 +35,31 @@ export class ConfigurationService extends Disposable implements IConfigurationSe
 
 	private readonly _defaultModel: ConfigurationModel;
 	private _userModel: ConfigurationModel;
+	/** 10: the workspace (folder) layer; empty until a folder with .mini/settings.json opens */
+	private _workspaceModel: ConfigurationModel;
 	private _merged: ConfigurationModel;
+
+	/** the workspace settings file on disk (null when no folder is open) */
+	private _workspaceSettingsPath: string | null = null;
 
 	/** our own last write; the watcher skips identical text (the reference's lastKnownDiskValue dance) */
 	private _lastKnownDiskValue: string | null = null;
+	private _workspaceLastKnownDiskValue: string | null = null;
 
 	private readonly _onDidChangeConfiguration = this._register(new Emitter<IConfigurationChangeEvent>());
 	readonly onDidChangeConfiguration: Event<IConfigurationChangeEvent> = this._onDidChangeConfiguration.event;
 
 	constructor(
 		private readonly _settingsPath: string,
-		private readonly _fileIO: IFileIOChannel,
+		private readonly _fileService: IFileService,
 		private readonly _logService: ILogService
 	) {
 		super();
 
 		this._defaultModel = new ConfigurationModel(this._createDefaultTree());
 		this._userModel = new ConfigurationModel(undefined);
-		this._merged = this._defaultModel.merge(this._userModel);
+		this._workspaceModel = new ConfigurationModel(undefined);
+		this._merged = this._defaultModel.merge(this._userModel).merge(this._workspaceModel);
 	}
 
 	private _createDefaultTree(): { [key: string]: unknown } {
@@ -69,7 +80,7 @@ export class ConfigurationService extends Disposable implements IConfigurationSe
 		return {
 			defaultValue: this._defaultModel.getValue(key) as T | undefined,
 			userValue: this._userModel.getValue(key) as T | undefined,
-			workspaceValue: undefined,
+			workspaceValue: this._workspaceModel.getValue(key) as T | undefined,
 			value: this._merged.getValue(key) as T | undefined
 		};
 	}
@@ -78,26 +89,43 @@ export class ConfigurationService extends Disposable implements IConfigurationSe
 		return this._settingsPath;
 	}
 
+	/** 10: point the workspace layer at `<folder>/.mini/settings.json` (null closes the folder) */
+	setWorkspaceSettingsPath(settingsPath: string | null): void {
+		if (this._workspaceSettingsPath === settingsPath) {
+			return;
+		}
+		this._workspaceSettingsPath = settingsPath;
+		this._workspaceModel = new ConfigurationModel(undefined);
+		this._workspaceLastKnownDiskValue = null;
+		this._applyMerged();
+	}
+
 	/** initial load; watcher-driven reloads go through `reload()` */
 	async load(): Promise<void> {
-		await this._reloadUserSettings(ConfigurationTarget.USER);
+		await this._reloadLayer(this._settingsPath, ConfigurationTarget.USER);
+		if (this._workspaceSettingsPath) {
+			await this._reloadLayer(this._workspaceSettingsPath, ConfigurationTarget.WORKSPACE);
+		}
 	}
 
 	async reload(): Promise<void> {
-		await this._reloadUserSettings(ConfigurationTarget.USER);
+		await this.load();
 	}
 
 	async updateValue(key: string, value: unknown, target: ConfigurationTarget = ConfigurationTarget.USER): Promise<void> {
-		if (target !== ConfigurationTarget.USER) {
-			throw new Error(`configuration target ${ConfigurationTargetToString(target)} is not supported yet`);
+		const isWorkspace = target === ConfigurationTarget.WORKSPACE;
+		const settingsPath = isWorkspace ? this._workspaceSettingsPath : this._settingsPath;
+		if (!settingsPath) {
+			throw new Error(`configuration target ${ConfigurationTargetToString(target)} is not available (no folder open)`);
 		}
+		const currentModel = isWorkspace ? this._workspaceModel : this._userModel;
 
 		// same value: no-op (the reference does the same)
-		if (this._userModel.getValue(key) === value) {
+		if (currentModel.getValue(key) === value) {
 			return;
 		}
 
-		const text = (await this._fileIO.readTextFile(this._settingsPath)) ?? '{}\n';
+		const text = (await this._readSettingsFile(settingsPath)) ?? '{}\n';
 
 		// settings files are usually FLAT (`"editor.fontSize": 16`), but nested objects are legal
 		// too. Real VS Code resolves per file: if a nested node exists, edit it; otherwise the
@@ -114,36 +142,50 @@ export class ConfigurationService extends Disposable implements IConfigurationSe
 			return; // modify produced nothing (e.g. unparseable file)
 		}
 
-		await this._fileIO.writeTextFile(this._settingsPath, newText);
+		await this._fileService.writeFile(URI.file(settingsPath), newText, { atomic: true });
 
 		// apply immediately; the watcher will see this exact text and skip it
-		this._lastKnownDiskValue = newText;
+		if (isWorkspace) {
+			this._workspaceLastKnownDiskValue = newText;
+		} else {
+			this._lastKnownDiskValue = newText;
+		}
 		const parsed = this._parseText(newText);
 		if (parsed !== undefined) {
-			this._applyUserValues(parsed, ConfigurationTarget.USER);
+			this._applyLayerValues(parsed, target);
 		}
 	}
 
-	private async _reloadUserSettings(source: ConfigurationTarget): Promise<void> {
+	private _readSettingsFile(settingsPath: string): Promise<string | null> {
+		return this._fileService.readFile(URI.file(settingsPath)).then(text => text, () => null);
+	}
+
+	private async _reloadLayer(settingsPath: string, target: ConfigurationTarget): Promise<void> {
+		const isWorkspace = target === ConfigurationTarget.WORKSPACE;
 		let text: string | null = null;
 		try {
-			text = await this._fileIO.readTextFile(this._settingsPath);
+			text = await this._readSettingsFile(settingsPath);
 		} catch {
 			text = null;
 		}
 
 		// unchanged text (including our own writes): nothing to do
-		if (text !== null && text === this._lastKnownDiskValue) {
+		const lastKnown = isWorkspace ? this._workspaceLastKnownDiskValue : this._lastKnownDiskValue;
+		if (text !== null && text === lastKnown) {
 			return;
 		}
-		this._lastKnownDiskValue = text;
+		if (isWorkspace) {
+			this._workspaceLastKnownDiskValue = text;
+		} else {
+			this._lastKnownDiskValue = text;
+		}
 
-		const userValues = text === null ? {} : this._parseText(text);
-		if (userValues === undefined) {
+		const values = text === null ? {} : this._parseText(text);
+		if (values === undefined) {
 			// invalid JSON: reported with line info; the last good model stays active
 			return;
 		}
-		this._applyUserValues(userValues, source);
+		this._applyLayerValues(values, target);
 	}
 
 	private _parseText(text: string): { [key: string]: unknown } | undefined {
@@ -168,16 +210,22 @@ export class ConfigurationService extends Disposable implements IConfigurationSe
 		return toValuesTree(parsed as { [key: string]: unknown }, message => this._logService.warn(message));
 	}
 
-	private _applyUserValues(userValues: { [key: string]: unknown }, source: ConfigurationTarget): void {
-		const newUserModel = new ConfigurationModel(userValues);
-		const newMerged = this._defaultModel.merge(newUserModel);
-		const change = this._merged.compare(newMerged);
-
-		this._userModel = newUserModel;
-		this._merged = newMerged;
-
-		if (change.keys.length > 0) {
-			this._onDidChangeConfiguration.fire(new ConfigurationChangeEvent(source, change));
+	private _applyLayerValues(values: { [key: string]: unknown }, target: ConfigurationTarget): void {
+		const newLayerModel = new ConfigurationModel(values);
+		if (target === ConfigurationTarget.WORKSPACE) {
+			this._workspaceModel = newLayerModel;
+		} else {
+			this._userModel = newLayerModel;
 		}
+		const before = this._merged;
+		this._applyMerged();
+		const change = before.compare(this._merged);
+		if (change.keys.length > 0) {
+			this._onDidChangeConfiguration.fire(new ConfigurationChangeEvent(target, change));
+		}
+	}
+
+	private _applyMerged(): void {
+		this._merged = this._defaultModel.merge(this._userModel).merge(this._workspaceModel);
 	}
 }

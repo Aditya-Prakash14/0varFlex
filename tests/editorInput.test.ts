@@ -4,49 +4,15 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import { Emitter, Event } from '../src/common/base/common/event.js';
 import { URI } from '../src/common/base/common/uri.js';
-import type { IFileIOChannel } from '../src/common/platform/fileIO/common/fileIO.js';
 import { Range } from '../src/common/editor/common/core/range.js';
 import { TextModel } from '../src/common/editor/common/model/textModel.js';
 import { TextEditorInput, basename } from '../src/renderer/workbench/common/editor/textEditorInput.js';
+import { createTestFileService } from './harness/fileSystem.js';
+import type { FileService } from '../src/common/platform/files/common/fileService.js';
 import { EditorPane } from '../src/renderer/workbench/common/editor/editorPane.js';
 import { CodeEditorService } from '../src/renderer/workbench/services/editor/browser/codeEditorService.js';
 
-class FakeFileIO implements IFileIOChannel {
-
-	readonly files = new Map<string, string>();
-	readonly writes: string[] = [];
-
-	async readTextFile(path: string): Promise<string | null> {
-		return this.files.get(path) ?? null;
-	}
-
-	async writeTextFile(path: string, content: string): Promise<void> {
-		this.files.set(path, content);
-		this.writes.push(path);
-	}
-
-	async exists(path: string): Promise<boolean> {
-		return this.files.has(path);
-	}
-
-	async getHomePath(): Promise<string> {
-		return '/home/test';
-	}
-
-	async getUserDataPath(): Promise<string> {
-		return '/userdata';
-	}
-
-	async deleteFile(path: string): Promise<void> {
-		this.files.delete(path);
-	}
-
-	onDidChangeFile(_path: string): Event<void> {
-		return new Emitter<void>().event;
-	}
-}
 
 class FakePane extends EditorPane {
 	override getId(): string { return 'fake'; }
@@ -58,8 +24,8 @@ class FakePane extends EditorPane {
 	override restoreViewState(): void { /* noop */ }
 }
 
-function makeInput(fileIO: FakeFileIO, codeEditorService: CodeEditorService, path: string): TextEditorInput {
-	return new TextEditorInput(URI.file(path), fileIO, codeEditorService, () => new FakePane());
+function makeInput(fileService: FileService, codeEditorService: CodeEditorService, path: string): TextEditorInput {
+	return new TextEditorInput(URI.file(path), fileService, codeEditorService, () => new FakePane());
 }
 
 test('basename: trailing slashes are safe (labels.ts port)', () => {
@@ -71,25 +37,25 @@ test('basename: trailing slashes are safe (labels.ts port)', () => {
 });
 
 test('text input: resolve loads once, model shared through the registry', async () => {
-	const fileIO = new FakeFileIO();
-	fileIO.files.set('/w/a.ts', 'const a = 1;\n');
+	const { fileService, fs } = createTestFileService();
+	fs.setFile('/w/a.ts', 'const a = 1;\n');
 	const registry = new CodeEditorService();
-	const input = makeInput(fileIO, registry, '/w/a.ts');
+	const input = makeInput(fileService, registry, '/w/a.ts');
 
 	const pane = await input.resolve();
 	assert.ok(pane instanceof FakePane);
 	assert.equal(input.getModel()?.getValue(), 'const a = 1;\n');
 	// a second resolve (another group) reuses the model, not the file read
-	fileIO.files.set('/w/a.ts', 'CHANGED ON DISK');
+	fs.setFile('/w/a.ts', 'CHANGED ON DISK');
 	await input.resolve();
 	assert.equal(input.getModel()?.getValue(), 'const a = 1;\n');
 });
 
 test('text input: dirty transitions fire once per crossing', async () => {
-	const fileIO = new FakeFileIO();
-	fileIO.files.set('/w/b.ts', 'hello');
+	const { fileService } = createTestFileService();
+	fileService.writeFile(URI.file('/w/b.ts'), 'hello');
 	const registry = new CodeEditorService();
-	const input = makeInput(fileIO, registry, '/w/b.ts');
+	const input = makeInput(fileService, registry, '/w/b.ts');
 	await input.resolve();
 	assert.equal(input.isDirty(), false);
 
@@ -112,10 +78,10 @@ test('text input: dirty transitions fire once per crossing', async () => {
 });
 
 test('text input: save writes, anchors the save point and closes the typing unit', async () => {
-	const fileIO = new FakeFileIO();
-	fileIO.files.set('/w/c.ts', 'a');
+	const { fileService, fs } = createTestFileService();
+	fs.setFile('/w/c.ts', 'a');
 	const registry = new CodeEditorService();
-	const input = makeInput(fileIO, registry, '/w/c.ts');
+	const input = makeInput(fileService, registry, '/w/c.ts');
 	await input.resolve();
 	const model = input.getModel()!;
 
@@ -123,7 +89,7 @@ test('text input: save writes, anchors the save point and closes the typing unit
 	model.pushEditOperations(null, [{ range: new Range(1, 2, 1, 2), text: 'b' }], () => null);
 	const saved = await input.save();
 	assert.equal(saved, true);
-	assert.equal(fileIO.files.get('/w/c.ts'), 'ab');
+	assert.equal(fs.getFile('/w/c.ts'), 'ab');
 	assert.equal(input.isDirty(), false);
 
 	// the classic pitfall: after save, undo ONE keystroke must not resurrect dirty from before
@@ -135,10 +101,10 @@ test('text input: save writes, anchors the save point and closes the typing unit
 });
 
 test('text input: revert goes back to disk and clears history', async () => {
-	const fileIO = new FakeFileIO();
-	fileIO.files.set('/w/d.ts', 'disk content');
+	const { fileService, fs } = createTestFileService();
+	fs.setFile('/w/d.ts', 'disk content');
 	const registry = new CodeEditorService();
-	const input = makeInput(fileIO, registry, '/w/d.ts');
+	const input = makeInput(fileService, registry, '/w/d.ts');
 	await input.resolve();
 	const model = input.getModel()!;
 

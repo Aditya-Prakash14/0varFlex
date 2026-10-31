@@ -5,12 +5,16 @@ import { fileURLToPath } from 'node:url';
 import { MainProcessIpc } from './parts/ipc/ipcMain.js';
 import { registerChannels } from './parts/ipc/channels.js';
 import { StorageMainService } from '../common/platform/storage/common/storageIpc.js';
+import { FileService } from '../common/platform/files/common/fileService.js';
+import { DiskFileSystemProvider } from './files/diskFileSystemProvider.js';
+import { createFileWatcher } from './files/fileWatcher.js';
 import { installMenu } from './menu.js';
 
 // In modern JavaScript modules there is no __dirname; these two lines recreate it.
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 let storage: StorageMainService;
+let fileService: FileService;
 
 /** `mini-vscode somefile.txt` — the CLI seed (14 grows this into a real argv parser) */
 function fileFromArgv(argv: string[]): string | null {
@@ -63,13 +67,22 @@ ipcMain.handle('mini:ping', (_event, payload: string) => ({
 const ipc = new MainProcessIpc((server, store, sender) => {
 	const window = BrowserWindow.fromWebContents(sender);
 	if (window) {
-		registerChannels(window, server, store, storage, openedFile);
+		registerChannels(window, server, store, storage, fileService, openedFile);
 	}
 });
 
 void app.whenReady().then(() => {
 	// storage lives in main (one file per scope) — the renderer reads through the channel
 	storage = new StorageMainService(app.getPath('userData'));
+
+	// 10: the file stack also lives in main: disk provider + watcher behind the `file` channel
+	const diskProvider = new DiskFileSystemProvider();
+	diskProvider.setLogger(message => console.log('[file]', message));
+	fileService = new FileService();
+	fileService.registerProvider('file', diskProvider);
+	const watcher = createFileWatcher(changes => fileService.fireFileChanges(changes), message => console.log('[file]', message));
+	fileService.setWatcher(watcher);
+
 	installMenu();
 	createWindow();
 });

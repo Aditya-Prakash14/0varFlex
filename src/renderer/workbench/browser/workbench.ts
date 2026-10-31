@@ -39,7 +39,9 @@ export class Workbench extends Disposable {
 		this._register(services.windowChannel.onDidMenuCommand(command => this.executeMenuCommand(command)));
 		this._register(this.layout.activitybar.onDidClickIcon(id => {
 			if (id === 'explorer') {
-				void this._commandService.executeCommand(TOGGLE_SIDEBAR_VISIBILITY_ID);
+				// 10: the icon focuses the Explorer view (the real behavior); the sidebar toggle
+				// stays available through its own command and the View menu
+				void this._commandService.executeCommand('workbench.view.explorer');
 			} else if (id === 'settings') {
 				void this._commandService.executeCommand(OPEN_SETTINGS_JSON_ID);
 			}
@@ -63,6 +65,9 @@ export class Workbench extends Disposable {
 			case 'openSampleFile':
 				// registered by 09's editor actions; a menu item without a command is a no-op
 				void this._commandService.executeCommand('mini.openSampleFile');
+				break;
+			case 'openFolder':
+				void this._commandService.executeCommand('workbench.action.files.openFolder');
 				break;
 		}
 	}

@@ -23,6 +23,7 @@ export interface IEditorGroupViewServices extends IPaneServices {
 
 interface ITabEntry {
 	readonly element: HTMLElement;
+	readonly label: HTMLElement;
 	readonly disposables: IDisposable[];
 }
 
@@ -110,6 +111,26 @@ export class EditorGroupView extends Disposable {
 
 	get activePane() {
 		return this._panes.activePane;
+	}
+
+	/** the cached pane of any input in this group (10's reload/mark-deleted passes) */
+	getPane(input: EditorInput) {
+		return this._panes.getPane(input) ?? null;
+	}
+
+	/** 10: deleting a file strikes its tab through until it is closed or saved again */
+	setEditorDeleted(input: EditorInput, deleted: boolean): void {
+		this._tabs.get(input)?.element.classList.toggle('deleted', deleted);
+	}
+
+	/** 10: the input's resource changed (rename/remap) — refresh the tab label */
+	updateEditor(input: EditorInput): void {
+		const entry = this._tabs.get(input);
+		if (!entry) {
+			return;
+		}
+		entry.label.textContent = input.getName();
+		entry.element.title = input.getResource()?.fsPath ?? input.getName();
 	}
 
 	closeEditor(input: EditorInput): void {
@@ -212,7 +233,7 @@ export class EditorGroupView extends Disposable {
 	private _addTab(input: EditorInput): void {
 		const element = $('.tab');
 		element.title = input.getResource()?.fsPath ?? input.getName();
-		append(element, $('.tab-label', {}, input.getName()));
+		const label = append(element, $('.tab-label', {}, input.getName()));
 		const actions = append(element, $('.tab-actions'));
 		const close = append(actions, $('.tab-action-close'));
 		close.setAttribute('role', 'button');
@@ -241,7 +262,7 @@ export class EditorGroupView extends Disposable {
 			}
 		});
 
-		this._tabs.set(input, { element, disposables: [dirtyListener, closeListener, tabListener] });
+		this._tabs.set(input, { element, label, disposables: [dirtyListener, closeListener, tabListener] });
 		append(this._tabsElement, element);
 	}
 

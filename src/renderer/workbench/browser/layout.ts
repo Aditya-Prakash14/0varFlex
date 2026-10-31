@@ -9,7 +9,6 @@ import { append, position, size, $ } from '../../base/browser/dom.js';
 import { Disposable } from '../../../common/base/common/lifecycle.js';
 import { IView, Orientation, SplitView } from '../../base/browser/ui/splitview/splitview.js';
 import type { ILogService } from '../../../common/platform/log/common/log.js';
-import type { IFileIOChannel } from '../../../common/platform/fileIO/common/fileIO.js';
 import { IContextKey } from '../../platform/contextkey/common/contextkey.js';
 import { ContextKeyService } from '../../platform/contextkey/common/contextKeyService.js';
 import type { ICommandService } from '../../platform/commands/common/commands.js';
@@ -42,7 +41,6 @@ export interface IWorkbenchLayoutServices {
 	readonly configuration: IConfigurationService;
 	readonly contextKeyService: ContextKeyService;
 	readonly commandService: ICommandService;
-	readonly fileIO: IFileIOChannel;
 	readonly editorOptions: EditorOptionsService;
 	readonly codeEditorService: CodeEditorService;
 }

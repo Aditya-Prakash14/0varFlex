@@ -9,7 +9,7 @@ export interface IWindowInfo {
 }
 
 /** Commands the Electron menu sends to the window's renderer. */
-export type WindowMenuCommand = 'toggleSidebar' | 'togglePanel' | 'openSampleFile';
+export type WindowMenuCommand = 'toggleSidebar' | 'togglePanel' | 'openSampleFile' | 'openFolder';
 
 export interface IWindowChannel {
 	getInfo(): Promise<IWindowInfo>;
@@ -21,6 +21,8 @@ export interface IWindowChannel {
 	onDidChangeFullScreen: Event<boolean>;
 	/** reveals a file in the OS file manager (Finder on macOS) */
 	showItemInFolder(path: string): Promise<void>;
+	/** the Open Folder picker (10); resolves to the picked folder or null */
+	showOpenFolderDialog(options?: { title?: string; defaultPath?: string }): Promise<string | null>;
 	// ---- window close veto (09): main asks, the renderer answers after its dialogs
 	onWillCloseWindow: Event<void>;
 	resolveClose(allow: boolean): Promise<void>;
@@ -28,4 +30,6 @@ export interface IWindowChannel {
 	requestCloseWindow(): Promise<void>;
 	/** the file passed on the command line (`mini-vscode somepath.txt`), or null */
 	getOpenedFile(): Promise<string | null>;
+	/** the app's userData directory (the environment path the renderer needs for settings etc.) */
+	getUserDataPath(): Promise<string>;
 }

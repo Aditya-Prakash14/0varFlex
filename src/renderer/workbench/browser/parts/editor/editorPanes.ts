@@ -170,8 +170,7 @@ export class EditorPanes extends Disposable {
 	}
 
 	/** switch back to an already-resolved pane (tab activation); null if never resolved */
-	activate(input: EditorInput): EditorPane | null {
-		const pane = this._cache.get(input);
+	activate(input: EditorInput): EditorPane | null {		const pane = this._cache.get(input);
 		if (!pane) {
 			return null;
 		}

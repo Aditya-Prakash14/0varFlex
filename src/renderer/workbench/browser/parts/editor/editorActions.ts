@@ -12,7 +12,7 @@
 
 import { Disposable, IDisposable, toDisposable } from '../../../../../common/base/common/lifecycle.js';
 import { URI } from '../../../../../common/base/common/uri.js';
-import type { IFileIOChannel } from '../../../../../common/platform/fileIO/common/fileIO.js';
+import type { IFileService } from '../../../../../common/platform/files/common/files.js';
 import { CommandMetadata, CommandsRegistry } from '../../../../platform/commands/common/commands.js';
 import { KeyCode, KeyMod } from '../../../../platform/keybinding/common/keyCodes.js';
 import { KeybindingsRegistry, KeybindingWeight } from '../../../../platform/keybinding/common/keybindingsRegistry.js';
@@ -38,11 +38,12 @@ const SAMPLE_FILE_TEXT = [
 ].join('\n');
 
 /** the dev/seed open path: ensure a small file exists in userData, then open it */
-function registerSampleFileAction(editorService: EditorService, fileIO: IFileIOChannel, userDataPath: string): void {
+function registerSampleFileAction(editorService: EditorService, fileService: IFileService, userDataPath: string): void {
 	const samplePath = URI.joinPath(URI.file(userDataPath), 'sample-hello.ts').fsPath;
 	CommandsRegistry.registerCommand(OPEN_SAMPLE_FILE_ID, async () => {
-		if (!(await fileIO.exists(samplePath))) {
-			await fileIO.writeTextFile(samplePath, SAMPLE_FILE_TEXT);
+		const sampleResource = URI.file(samplePath);
+		if (!(await fileService.exists(sampleResource))) {
+			await fileService.writeFile(sampleResource, SAMPLE_FILE_TEXT, { atomic: true });
 		}
 		await editorService.openEditor({ resource: URI.file(samplePath) });
 	});
@@ -56,7 +57,7 @@ function registerSampleFileAction(editorService: EditorService, fileIO: IFileIOC
 export function registerEditorActions(
 	editorService: EditorService,
 	editorPart: EditorPart,
-	fileIO: IFileIOChannel,
+	fileService: IFileService,
 	userDataPath: string
 ): IDisposable {
 	const disposables: IDisposable[] = [];
@@ -76,7 +77,7 @@ export function registerEditorActions(
 	register(NEXT_EDITOR_ID, 'Open Next Editor', 'View', () => editorPart.activeGroup.activateNext());
 	register(PREVIOUS_EDITOR_ID, 'Open Previous Editor', 'View', () => editorPart.activeGroup.activatePrevious());
 
-	registerSampleFileAction(editorService, fileIO, userDataPath);
+	registerSampleFileAction(editorService, fileService, userDataPath);
 
 	disposables.push(KeybindingsRegistry.registerKeybindingRule({
 		id: SAVE_FILE_ID,

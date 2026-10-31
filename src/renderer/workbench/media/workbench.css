@@ -640,6 +640,214 @@ body {
 	outline-offset: -2px;
 }
 
+/* ---- explorer (exercise 10) ---- */
+
+.explorer-view {
+	position: absolute;
+	inset: 0;
+	display: flex;
+	flex-direction: column;
+	overflow: hidden;
+}
+
+.explorer-workspace-label {
+	padding: 4px 12px 2px;
+	font-size: 11px;
+	font-weight: 700;
+	color: var(--mini-foreground);
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.explorer-workspace-label.empty {
+	display: none;
+}
+
+.explorer-tree-container {
+	position: relative;
+	flex: 1;
+	overflow: hidden;
+}
+
+.explorer-tree {
+	position: absolute;
+	inset: 0;
+	outline: none;
+	overflow-y: auto;
+	overflow-x: hidden;
+	scrollbar-width: none;
+}
+
+.explorer-tree::-webkit-scrollbar {
+	display: none;
+}
+
+.explorer-rows {
+	position: relative;
+	width: 100%;
+}
+
+.tree-row {
+	position: absolute;
+	left: 0;
+	right: 0;
+	height: 22px;
+	display: flex;
+	align-items: center;
+	cursor: pointer;
+	white-space: nowrap;
+}
+
+.tree-row.selected {
+	background: #04395e;
+}
+
+.tree-row.selected.focused {
+	background: #094771;
+}
+
+.tree-row:hover {
+	background: rgba(255, 255, 255, 0.06);
+}
+
+.tree-row.selected:hover {
+	background: #094771;
+}
+
+/* indentation: 8px per level (workbench.tree.indent default); the twistie is 16px */
+.monaco-tl-indent {
+	flex: none;
+	height: 100%;
+}
+
+.monaco-tl-twistie {
+	flex: none;
+	width: 16px;
+	height: 100%;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	color: #cccccc;
+}
+
+.monaco-tl-twistie::before {
+	content: '❯';
+	font-size: 9px;
+	transition: transform 0.1s ease-out;
+	transform: rotate(90deg);
+	opacity: 0.8;
+}
+
+.monaco-tl-twistie.collapsible.collapsed::before,
+.monaco-tl-twistie:not(.expanded)::before {
+	transform: rotate(0deg);
+}
+
+.monaco-tl-contents {
+	flex: 1;
+	display: flex;
+	align-items: center;
+	gap: 4px;
+	min-width: 0;
+}
+
+.file-icon {
+	display: flex;
+	flex: none;
+}
+
+.file-icon svg {
+	width: 16px;
+	height: 16px;
+	fill: currentColor;
+}
+
+.tree-row .label-name {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	font-size: 13px;
+	color: var(--mini-foreground);
+}
+
+/* hover actions fade in (pointer-events stay off while hidden) */
+.row-actions {
+	display: flex;
+	align-items: center;
+	flex: none;
+	margin-left: auto;
+	padding-right: 4px;
+	opacity: 0;
+	pointer-events: none;
+	transition: opacity 0.1s ease-out;
+}
+
+.tree-row:hover .row-actions {
+	opacity: 1;
+	pointer-events: auto;
+}
+
+.row-action {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 22px;
+	height: 22px;
+	border-radius: 4px;
+	cursor: pointer;
+}
+
+.row-action:hover {
+	background: rgba(255, 255, 255, 0.1);
+}
+
+.row-action svg {
+	width: 14px;
+	height: 14px;
+	fill: #cccccc;
+}
+
+/* inline input (New File/Folder, Rename) */
+.inline-input-widget {
+	position: absolute;
+	z-index: 10;
+}
+
+.inline-input-box {
+	width: 100%;
+	height: 20px;
+	padding: 0 4px;
+	box-sizing: border-box;
+	background: #3c3c3c;
+	border: 1px solid var(--mini-accent);
+	outline: none;
+	color: #ffffff;
+	font: 13px -apple-system, 'Helvetica Neue', 'Segoe UI', sans-serif;
+}
+
+.inline-input-message {
+	position: absolute;
+	top: 21px;
+	left: 0;
+	right: 0;
+	display: none;
+	padding: 3px 6px;
+	background: #5a1d1d;
+	color: #f48771;
+	font-size: 12px;
+	z-index: 11;
+}
+
+/* a file deleted on disk: the tab is struck through until closed or saved again */
+.tab.deleted .tab-label {
+	text-decoration: line-through;
+	opacity: 0.6;
+}
+
+.statusbar-entry.clickable {
+	cursor: pointer;
+}
+
 /* ---- panel ---- */
 
 .part.panel {

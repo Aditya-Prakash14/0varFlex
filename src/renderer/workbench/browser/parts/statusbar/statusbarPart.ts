@@ -16,6 +16,9 @@ export interface IStatusbarEntry {
 	readonly alignment: StatusbarAlignment;
 	/** higher priority sits closer to the edge of its side */
 	readonly priority?: number;
+	/** clicking the entry (10: the file-changed warning) */
+	readonly onClick?: () => void;
+	readonly title?: string;
 }
 
 export class StatusbarPart extends Part {
@@ -45,6 +48,13 @@ export class StatusbarPart extends Part {
 
 		const container = entry.alignment === StatusbarAlignment.LEFT ? this._leftContainer! : this._rightContainer!;
 		const element = $('.statusbar-entry', {}, entry.text);
+		if (entry.title) {
+			element.title = entry.title;
+		}
+		if (entry.onClick) {
+			element.classList.add('clickable');
+			element.addEventListener('click', () => entry.onClick?.());
+		}
 		this._entries.set(id, { entry, element });
 
 		// keep the container ordered by priority (higher first)

@@ -5,8 +5,9 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
 import { Event } from '../src/common/base/common/event.js';
-import type { IFileIOChannel } from '../src/common/platform/fileIO/common/fileIO.js';
+import { URI } from '../src/common/base/common/uri.js';
 import type { ILogService } from '../src/common/platform/log/common/log.js';
+import { createTestFileService } from './harness/fileSystem.js';
 import { ConfigurationTarget } from '../src/common/platform/configuration/common/configuration.js';
 import { ConfigurationModel } from '../src/common/platform/configuration/common/configurationModels.js';
 import { ConfigurationService } from '../src/common/platform/configuration/common/configurationService.js';
@@ -25,26 +26,17 @@ function makeLogService(): { service: ILogService; errors: string[] } {
 	return { service, errors };
 }
 
-class FakeFileIO {
-	private readonly _files = new Map<string, string>();
-	constructor(initial?: { [path: string]: string }) {
-		for (const [path, content] of Object.entries(initial ?? {})) {
-			this._files.set(path, content);
-		}
-	}
-	readTextFile(path: string): Promise<string | null> {
-		return Promise.resolve(this._files.get(path) ?? null);
-	}
-	writeTextFile(path: string, content: string): Promise<void> {
-		this._files.set(path, content);
-		return Promise.resolve();
-	}
-	getText(path: string): string | undefined {
-		return this._files.get(path);
-	}
-}
-
 const SETTINGS = '/test/User/settings.json';
+const WORKSPACE_SETTINGS = '/test/workspace/.mini/settings.json';
+
+/** the harness gives every test a real FileService over the in-memory provider */
+function makeFileService(initialContent?: string): ReturnType<typeof createTestFileService> {
+	const harness = createTestFileService();
+	if (initialContent !== undefined) {
+		harness.fs.setFile(SETTINGS, initialContent);
+	}
+	return harness;
+}
 
 test('ConfigurationModel: objects deep-merge; arrays and scalars replace', () => {
 	const base = new ConfigurationModel({ editor: { fontSize: 14, tabSize: 4, rulers: [80] } });
@@ -65,9 +57,9 @@ test('inspect() reports defaultValue and userValue per target', async () => {
 		}
 	});
 	try {
-		const fileIO = new FakeFileIO();
+		const { fileService, fs } = makeFileService();
 		const { service: logService } = makeLogService();
-		const configuration = new ConfigurationService(SETTINGS, fileIO as unknown as IFileIOChannel, logService);
+		const configuration = new ConfigurationService(SETTINGS, fileService, logService);
 		await configuration.load();
 
 		assert.equal(configuration.getValue<number>('editor.fontSize'), 14);
@@ -79,7 +71,7 @@ test('inspect() reports defaultValue and userValue per target', async () => {
 		assert.equal(inspected.value, 16);
 
 		// the write landed in the file
-		assert.ok(fileIO.getText(SETTINGS)!.includes('16'));
+		assert.ok(fs.getFile(SETTINGS)!.includes('16'));
 	} finally {
 		disposable.dispose();
 	}
@@ -94,9 +86,9 @@ test('onDidChangeConfiguration + affectsConfiguration', async () => {
 		}
 	});
 	try {
-		const fileIO = new FakeFileIO();
+		const { fileService } = makeFileService();
 		const { service: logService } = makeLogService();
-		const configuration = new ConfigurationService(SETTINGS, fileIO as unknown as IFileIOChannel, logService);
+		const configuration = new ConfigurationService(SETTINGS, fileService, logService);
 		await configuration.load();
 
 		const events: string[][] = [];
@@ -128,14 +120,14 @@ test('updateValue is formatting-preserving (comments and indent survive)', async
 		}
 	});
 	try {
-		const fileIO = new FakeFileIO({ [SETTINGS]: original });
+		const { fileService, fs } = makeFileService(original);
 		const { service: logService } = makeLogService();
-		const configuration = new ConfigurationService(SETTINGS, fileIO as unknown as IFileIOChannel, logService);
+		const configuration = new ConfigurationService(SETTINGS, fileService, logService);
 		await configuration.load();
 
 		await configuration.updateValue('editor.tabSize', 8, ConfigurationTarget.USER);
 
-		const updated = fileIO.getText(SETTINGS)!;
+		const updated = fs.getFile(SETTINGS)!;
 		assert.equal(updated, original.replace('"editor.tabSize": 2', '"editor.tabSize": 8'));
 		assert.ok(updated.includes('// my settings — do not reformat'));
 		assert.ok(updated.includes('"editor.fontSize": 16'));
@@ -152,24 +144,69 @@ test('invalid JSON: errors with line info, last good model stays, recovery is li
 		}
 	});
 	try {
-		const fileIO = new FakeFileIO();
+		const { fileService, fs } = makeFileService();
 		const { service: logService, errors } = makeLogService();
-		const configuration = new ConfigurationService(SETTINGS, fileIO as unknown as IFileIOChannel, logService);
+		const configuration = new ConfigurationService(SETTINGS, fileService, logService);
 		await configuration.load();
 
 		await configuration.updateValue('editor.fontSize', 16, ConfigurationTarget.USER);
 		assert.equal(configuration.getValue<number>('editor.fontSize'), 16);
 
 		// break the file: line 3 is garbage
-		await fileIO.writeTextFile(SETTINGS, `{\n\t"editor.fontSize": 16,\n\tthis is not json\n}\n`);
+		fs.setFile(SETTINGS, `{\n\t"editor.fontSize": 16,\n\tthis is not json\n}\n`);
 		await configuration.reload();
 		assert.equal(configuration.getValue<number>('editor.fontSize'), 16, 'last good value stays active');
 		assert.ok(errors.some(message => message.includes('line 3')), `expected a line-3 error, got ${JSON.stringify(errors)}`);
 
 		// fix it: recovery is live
-		await fileIO.writeTextFile(SETTINGS, `{ "editor.fontSize": 18 }`);
+		fs.setFile(SETTINGS, `{ "editor.fontSize": 18 }`);
 		await configuration.reload();
 		assert.equal(configuration.getValue<number>('editor.fontSize'), 18);
+	} finally {
+		disposable.dispose();
+	}
+});
+
+test('workspace layer: DEFAULT < USER < WORKSPACE; closing the folder reverts', async () => {
+	const disposable = ConfigurationRegistry.registerConfiguration({
+		id: 'testConfigurationWorkspace',
+		properties: {
+			'editor.fontSize': { type: 'number', default: 14 },
+			'editor.tabSize': { type: 'number', default: 4 }
+		}
+	});
+	try {
+		const { fileService, fs } = makeFileService(`{ "editor.fontSize": 16 }`);
+		fs.setFile(WORKSPACE_SETTINGS, `{ "editor.fontSize": 22 }`);
+
+		const { service: logService } = makeLogService();
+		const configuration = new ConfigurationService(SETTINGS, fileService, logService);
+		await configuration.load();
+		assert.equal(configuration.getValue<number>('editor.fontSize'), 16, 'user layer wins over defaults');
+
+		// opening the folder brings the workspace layer in (22 beats 16)
+		configuration.setWorkspaceSettingsPath(WORKSPACE_SETTINGS);
+		await configuration.load();
+		assert.equal(configuration.getValue<number>('editor.fontSize'), 22, 'workspace beats user');
+		assert.equal(configuration.getValue<number>('editor.tabSize'), 4, 'untouched keys fall through to defaults');
+
+		const inspected = configuration.inspect<number>('editor.fontSize');
+		assert.equal(inspected.defaultValue, 14);
+		assert.equal(inspected.userValue, 16);
+		assert.equal(inspected.workspaceValue, 22);
+		assert.equal(inspected.value, 22);
+
+		// closing the folder reverts to the user layer
+		configuration.setWorkspaceSettingsPath(null);
+		assert.equal(configuration.getValue<number>('editor.fontSize'), 16, 'no folder: workspace layer is gone');
+
+		// and workspace writes edit the workspace file (surgical, like the user file)
+		configuration.setWorkspaceSettingsPath(WORKSPACE_SETTINGS);
+		await configuration.load();
+		await configuration.updateValue('editor.tabSize', 8, ConfigurationTarget.WORKSPACE);
+		assert.equal(configuration.getValue<number>('editor.tabSize'), 8);
+		assert.ok(fs.getFile(WORKSPACE_SETTINGS)!.includes('"editor.tabSize": 8'));
+		assert.ok(fs.getFile(WORKSPACE_SETTINGS)!.includes('"editor.fontSize": 22'), 'the rest of the file survives');
 	} finally {
 		disposable.dispose();
 	}

@@ -42,6 +42,11 @@ const defaultSettings: IConfigurationNode = {
 			type: 'string',
 			default: 'Default Dark',
 			description: 'Specifies the color theme used in the workbench.'
+		},
+		'explorer.confirmDelete': {
+			type: 'boolean',
+			default: true,
+			description: 'Controls whether the Explorer should ask for confirmation when deleting a file via the trash.'
 		}
 	}
 };

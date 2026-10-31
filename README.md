@@ -7,6 +7,20 @@ editor view).
 
 ## Known deltas worth knowing before extending
 
+- **File stack**: one `file` provider (disk) running in main behind the `file` channel (02's
+  hand-written `FileIOChannel` is retired); string-only content (no streams/VSBuffer), no UNC or
+  network handling; deletes go to the OS trash with an `rm` fallback on volumes without one.
+- **Watcher**: a single recursive `fs.watch` host (node supports recursion on macOS/Windows
+  only), no `@parcel/watcher`-class native recursion and no correlation ids — a stale-delete
+  guard covers the create-then-rename race; `excludes` are path-segment names, not globs.
+- **External changes**: a clean editor reloads silently (cursor/scroll preserved); a dirty one
+  gets a status-bar warning whose click reloads after a confirmation (real VS Code keeps your
+  version and offers a compare).
+- **Workspace**: a single folder, remembered by path in application storage (real: workspace
+  storage keyed by folder hash), workspace settings in `<folder>/.mini/settings.json` (real:
+  `.vscode/settings.json`); no hot-exit, so open editors do not survive a relaunch.
+- **Explorer**: no multi-select, drag-drop move/copy, compact folders or icon themes; the inline
+  input rejects `a/b` (real VS Code creates the intermediate folders).
 - **Word wrap is not implemented.** Wrapped-line rendering is its own coordinate system (view
   lines vs model lines, wrapping columns, injected text) — it is deliberately out of scope. If
   wrapping is wanted later, porting `viewParts/lines/` wrapping calculations (the real

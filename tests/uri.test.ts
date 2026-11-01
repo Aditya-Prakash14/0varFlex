@@ -29,7 +29,7 @@ test('parse splits scheme/authority/path and decodes percent-encoding', () => {
 	assert.equal(uri.toString(), 'file:///tmp/a%20b.ts');
 });
 
-test('file(): fsPath round-trips 20 tricky paths', () => {
+test('file(): fsPath round-trips tricky paths', () => {
 	const paths = [
 		'/Users/x/a b.ts',
 		'/tmp/über/страница.md',

@@ -269,11 +269,26 @@ test('stripAnsiStreaming: text with no escapes passes straight through', () => {
 });
 
 test('stripAnsiStreaming: a lone ESC in binary junk does not stall the stream forever', () => {
-	// 33 bytes of tail is past the cap, so it is emitted as data rather than held
-	const junk = '\u001b' + 'x'.repeat(40);
+	// past the cap the tail is emitted as data rather than held indefinitely
+	const junk = '\u001b' + 'x'.repeat(2000);
 	const result = stripAnsiStreaming('', junk);
 	assert.equal(result.pending, '', 'the stream must not stall waiting for a terminator');
 	assert.ok(result.text.length > 0);
+});
+
+test('stripAnsiStreaming: a LONG window title split across chunks is still stripped', () => {
+	// a real OSC title carries a whole command line, far past a few dozen characters. The cap
+	// used to be 32, so this sequence was abandoned mid-way and its text leaked into the output.
+	const title = 'C:\\Users\\admin\\Desktop\\0varFlex - npm run build';
+	assert.ok(title.length > 32, 'the fixture must exceed the old cap to be meaningful');
+
+	const whole = `\u001b]0;${title}\u0007done\n`;
+	const splitAt = 10; // mid-title
+	const first = stripAnsiStreaming('', whole.slice(0, splitAt));
+	const second = stripAnsiStreaming(first.pending, whole.slice(splitAt));
+
+	assert.equal(first.text + second.text, 'done\n', 'no part of the title may reach the output');
+	assert.equal(second.pending, '');
 });
 
 test('stripAnsiStreaming: an OSC sequence split across chunks is held then stripped', () => {

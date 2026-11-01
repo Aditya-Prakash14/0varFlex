@@ -103,14 +103,19 @@ export async function activate(context: {
 			await vscode.window.showWarningMessage('Nothing to commit: type a commit message first.');
 			return;
 		}
+		// Clear the box NOW, not after the commit returns. `git commit` takes a moment, and a
+		// clear that lands afterwards would wipe whatever the user had started typing in the
+		// meantime. On failure the message is handed straight back.
+		sourceControl.inputBox.value = '';
+
 		// -a so the lack of a staging area is not a dead end: commit every tracked change
 		const result = await run('git', ['commit', '-a', '-m', message], repoRoot);
 		if (result.code !== 0) {
+			sourceControl.inputBox.value = message;
 			const detail = (result.stderr.trim() || result.stdout.trim() || 'unknown error').split('\n')[0];
 			await vscode.window.showErrorMessage(`Commit failed: ${detail}`);
 			return;
 		}
-		sourceControl.inputBox.value = '';
 		await vscode.window.showInformationMessage(`Committed: ${message.split('\n')[0]}`);
 		await refresh();
 	}));
@@ -141,7 +146,9 @@ export async function activate(context: {
 			// Assigning resourceStates always fires a change, which costs an RPC round trip and a
 			// full repaint of the view. Polling every 5s means that happened forever even when
 			// nothing had changed, so compare first and only publish real changes.
-			const signature = entries.map(entry => `${entry.letter} ${entry.path}`).join('\n');
+			// originalPath is in here because the tooltip shows it: a rename whose SOURCE changed
+			// while its letter and path stayed the same would otherwise keep a stale tooltip.
+			const signature = entries.map(entry => `${entry.letter} ${entry.path} ${entry.originalPath ?? ''}`).join('\n');
 			if (signature === lastSignature) {
 				return;
 			}

@@ -44,6 +44,9 @@ export const TASK_MARKER_OWNER = 'task';
 /** the most output a task keeps; a watch task would otherwise grow without bound */
 export const MAX_OUTPUT_CHARS = 200_000;
 
+/** prepended when old output is dropped, so a truncated log never looks complete */
+export const TRUNCATION_MARKER = '… earlier output dropped …\n';
+
 export type TaskRunState = 'idle' | 'running' | 'exited';
 
 export interface ITaskExecution {
@@ -156,6 +159,17 @@ export class TaskService extends Disposable {
 	 * supplies it because the choice is UX, not task logic.
 	 */
 	async runTask(task: ITask, onBusy?: () => Promise<'terminate' | 'restart' | 'cancel'>): Promise<boolean> {
+		const folder = this._options.getWorkspaceFolder();
+
+		// Trust comes FIRST, before anything is destroyed. The gate lives here rather than in the
+		// commands so the output pane's Restart button cannot route around it — but asking after
+		// the busy prompt had already terminated the running task meant a refusal killed a build
+		// and started nothing in its place. For an already-trusted folder this asks nothing, so
+		// the common path is unchanged.
+		if (folder && !await this._options.isTrusted(folder)) {
+			return false;
+		}
+
 		if (this._state === 'running') {
 			const choice = onBusy ? await onBusy() : 'cancel';
 			if (choice === 'cancel') {
@@ -167,12 +181,6 @@ export class TaskService extends Disposable {
 			}
 		}
 
-		const folder = this._options.getWorkspaceFolder();
-		// the trust gate lives here, not in the commands, so the output pane's Restart button
-		// cannot route around it
-		if (folder && !await this._options.isTrusted(folder)) {
-			return false;
-		}
 		const expanded = expandTask(task, {
 			workspaceFolder: folder?.fsPath,
 			file: this._options.getActiveFile()?.fsPath
@@ -243,8 +251,12 @@ export class TaskService extends Disposable {
 		this._output += text;
 		// A watch task runs for hours; without this the service holds every byte it ever printed
 		// and the problem matcher re-scans all of it on each exit.
-		if (this._output.length > MAX_OUTPUT_CHARS) {
-			this._output = this._output.slice(this._output.length - MAX_OUTPUT_CHARS);
+		//
+		// Trim with HEADROOM. Trimming at exactly the cap meant every later chunk was over it,
+		// so each one copied the whole buffer — about 40MB/s for a steadily printing task. With
+		// headroom the copy happens once per 25% of the cap instead of once per chunk.
+		if (this._output.length > MAX_OUTPUT_CHARS * 1.25) {
+			this._output = TRUNCATION_MARKER + this._output.slice(this._output.length - MAX_OUTPUT_CHARS);
 		}
 		this._onDidWriteOutput.fire(text);
 	}
@@ -326,7 +338,10 @@ export function stripAnsi(value: string): string {
 }
 
 /** the longest escape tail we hold back; past this a lone ESC is treated as ordinary data */
-const MAX_PENDING_ESCAPE = 32;
+// An OSC window-title sequence (`ESC ] 0 ; <title> BEL`) carries a whole command line or path,
+// so it routinely exceeds a few dozen characters. A cap of 32 gave up on those mid-sequence and
+// leaked the title text into the output — the exact thing this function exists to prevent.
+const MAX_PENDING_ESCAPE = 1024;
 
 /**
  * Strip escapes from a STREAM, one chunk at a time.

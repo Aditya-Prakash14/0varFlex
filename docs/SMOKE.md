@@ -48,47 +48,49 @@ run on this machine; results are recorded in the next section.
 - `npm test` — 26 unit test files bundled by esbuild, run on `node --test`
 - app boot — `electron .` starting main + renderer + ext host + pty host without crashing
 
-### Results, measured on this machine 2026-11-01
+### Results, measured on this machine 2026-11-02
 
 | Gate | Result | Detail |
 |---|---|---|
 | `npm ci` | **PASS** | exit 0, 239 packages, Node 24.22.1 |
-| `npm run build` | **PASS** | 61s; all six entry bundles emitted to `out/` (`main.js` 684KB, `renderer.js` 963KB, `extHost.cjs` 57KB, `ptyHost.cjs` 22KB, `preload.cjs` 2KB, plus the sample extensions) |
-| `npm test` | **FAIL** | 50s wall clock. **162 passed, 22 failed** across 6 of 26 files |
+| `npm run build` | **PASS** | 4s warm (61s cold); all entry bundles emitted to `out/` (`main.js` 697KB, `renderer.js` 1.0MB, `extHost.cjs` 74KB, `ptyHost.cjs` 22KB, `preload.cjs` 2KB, plus the sample extensions) |
+| `npm run build --production` | **PASS** | bundle-hygiene checks pass; no Node builtins in `renderer.js` |
+| `npm test` | **PASS** | 18s wall clock. **296 passed, 0 failed**, exit 0 — green on three consecutive runs |
 | app boot (`electron .`) | `[ ]` NOT RUN | Electron's postinstall never produced `node_modules/electron/dist`; see below |
 
 **The build is genuinely portable.** esbuild compiled every bundle on Windows with no changes, and
 the mac-only `chmod` of node-pty's `spawn-helper` no-ops as designed.
 
-#### The 22 test failures are one root cause, and it is in the tests
+#### The suite used to fail 22 of 184 here — and that hid two real bugs
 
-All of them trace to `URI.fsPath` being platform-dependent — which is *correct* and matches
-upstream. `uriToFsPath` renders Windows separators on win32
-([uri.ts:346](../src/common/base/common/uri.ts#L346): `value.replace(/\//g, '\\')`). The test
-harness and fixtures assume POSIX separators:
+This section previously recorded "162 passed, 22 failed" and concluded that the suite was a
+macOS-only gate and that **no product bug was involved**. That conclusion was wrong, and the way
+it was wrong is the lesson worth keeping.
 
-- **`tests/harness/fileSystem.ts` (11 failures — `configuration` 4, `editorInput` 3, `fileWatcher` 7
-  minus overlap)** — the in-memory provider keys entries by `resource.fsPath` but `setFile(path)`
-  stores under the raw POSIX string it is handed, and the directory logic uses literal `/`
-  (`split('/')`, `endsWith('/')`, `prefix + '/'`). On Windows `setFile('/test/User/settings.json')`
-  stores one key while reads look up `\test\User\settings.json`, so every read misses. The visible
-  symptom is the config service silently seeing no settings file: defaults win over the user layer
-  (`14 !== 16`), a deliberately invalid settings file produces zero parse errors, and a
-  formatting-preserving write appears not to apply.
-- **`tests/uri.test.ts` (6 failures)** — asserts POSIX output directly, e.g. expects
-  `//server/share/x` where win32 correctly gives `\\server\share\x`.
-- **`tests/fileWatcher.test.ts`** — the coalescing *logic* is fine; the assertions compare rendered
-  `fsPath` strings. The one coalesce test that compares against `[]` passes, which is the proof.
-- **`tests/terminalEnv.test.ts` (1)** — `resolveDefaultShell` reads `$SHELL`, which does not exist
-  on Windows.
-- **`tests/storage.test.ts` (1)** — the exception: it **passes in isolation** and only fails in the
-  full parallel run, so it is test interference (shared fixture path or real-timer sensitivity under
-  load), not a platform issue. Worth fixing on its own merits.
+The 22 failures did share one root cause in the tests: `URI.fsPath` is platform-dependent, which
+is *correct* and matches upstream ([uri.ts:346](../src/common/base/common/uri.ts#L346)), while the
+harness keyed its in-memory files by the POSIX string it was handed and looked them up by
+`fsPath`. One normalizer in `tests/harness/fileSystem.ts` fixed 11 of them, and making the
+`uri` / `fileWatcher` / `terminalEnv` expectations platform-aware fixed the rest.
 
-**No product bug was found by this run.** The suite is a macOS-only gate, consistent with the
-macOS-only packaging. Porting it would mean normalizing paths in the harness and making
-`uri.test.ts` expectations platform-aware — deliberately *not* done here, since this repo targets
-darwin and changing assertions to pass on an untargeted platform would weaken them.
+But with the noise gone, three things surfaced that had been invisible:
+
+- **`watcher.isParent()` hardcoded `/`** — so on Windows a deleted folder never suppressed its
+  children's DELETE events. Deleting a folder of 200 files produced 201 events instead of 1, and
+  every consumer (explorer refresh, editor mark-deleted) did 201 events' worth of work.
+- **`watcher.matchesExclude()` split on `/` only** — so on Windows **every exclude was silently
+  ignored**, and changes under `node_modules` and `.git` were all reported.
+- **A regression** in the A2-2 framing extraction: the reader's error message was renamed when it
+  moved out of the LSP client, breaking a test nobody could see among the 22.
+
+Both watcher bugs are in shared product code and are now covered by tests that use backslash paths,
+so they fail on **every** platform rather than only on Windows.
+
+The `storage` test was also genuinely flaky — it passed in isolation and failed under parallel
+load because it slept a fixed 100ms for a 30ms debounce. It now waits for the write to happen.
+
+**The standing lesson:** a suite with known-failing tests is not a gate. The 22 were correctly
+diagnosed as platform assumptions and incorrectly treated as harmless.
 
 #### Why app boot was not run
 
@@ -108,10 +110,13 @@ this environment has no way to provide.
 | 100k-line file open | < 300ms | NOT RUN | needs a running app |
 | Scroll frame pass (steady state) | < 8ms | NOT RUN | needs a GUI; counter exists in `src/renderer/editor/browser/view.ts` |
 | Terminal `yes` flood keeps frames < 16ms | — | NOT RUN | needs GUI; `yes` not present on Windows |
-| Full `npm test` | < 60s | **50s — within budget** | measured here; 162 pass / 22 fail (platform, see above) |
+| Full `npm test` | < 60s | **18s — within budget** | measured here; 296 pass / 0 fail, exit 0 |
 
-**No performance fix was made, and none is owed.** The only budget measurable here (`npm test`,
-50s vs 60s) is inside budget, and the rule is to fix nothing under 2× budget.
+**No performance fix was owed by a budget.** The only budget measurable here (`npm test`, 18s vs
+60s) is well inside it, and the rule is to fix nothing under 2× budget. Two performance fixes were
+made anyway, for problems the budgets do not cover: the task output pane re-scanned its whole
+buffer every 50ms while a task streamed, and the output cap re-copied 200,000 characters on every
+chunk once full. Both are now amortized.
 
 Five of the six budgets are GUI/bundle measurements and are genuinely unmeasured — not estimated,
 not inferred. Filling them in is the first task of a macOS pass. The instrumentation they need is

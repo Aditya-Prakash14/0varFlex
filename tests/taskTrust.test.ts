@@ -17,6 +17,7 @@ const TASK: ITask = {
 
 function makeService(trusted: boolean | (() => Promise<boolean>)) {
 	const spawned: { shell?: string; args?: readonly string[] }[] = [];
+	const killed: number[] = [];
 	let trustAsked = 0;
 
 	const terminalService = {
@@ -27,7 +28,7 @@ function makeService(trusted: boolean | (() => Promise<boolean>)) {
 			return { id: 1, shellName: 'test' };
 		},
 		start: async () => { /* nothing to start in a stub */ },
-		shutdown: async () => { /* nothing to kill */ }
+		shutdown: async (id: number) => { killed.push(id); }
 	};
 
 	const logService: ILogService = {
@@ -48,7 +49,7 @@ function makeService(trusted: boolean | (() => Promise<boolean>)) {
 		}
 	});
 
-	return { service, spawned, trustAsked: () => trustAsked };
+	return { service, spawned, killed, trustAsked: () => trustAsked };
 }
 
 test('trust gate: a refused folder does not spawn anything', async () => {
@@ -105,4 +106,30 @@ test('trust gate: a refused task is not remembered as running, so the next one i
 	allow = true;
 	assert.equal(await service.runTask(TASK), true);
 	assert.equal(spawned.length, 1);
+});
+
+test('trust gate: a refusal must not kill the task that is already running', async () => {
+	// The gate used to be checked AFTER the "already running" prompt, so choosing Restart
+	// terminated the running task and a refusal then started nothing in its place — a build
+	// killed for no reason. Trust is now decided before anything is destroyed.
+	let allow = true;
+	const { service, spawned, killed } = makeService(async () => allow);
+
+	assert.equal(await service.runTask(TASK), true);
+	assert.equal(spawned.length, 1);
+	assert.equal(service.state, 'running');
+
+	// the folder is no longer trusted (a different repo was opened)
+	allow = false;
+	let busyAsked = 0;
+	const started = await service.runTask(TASK, async () => {
+		busyAsked++;
+		return 'restart';
+	});
+
+	assert.equal(started, false);
+	assert.equal(busyAsked, 0, 'the busy prompt must not even be reached on a refusal');
+	assert.deepEqual(killed, [], 'the running task must survive a refused run');
+	assert.equal(service.state, 'running', 'and it must still be reported as running');
+	assert.equal(spawned.length, 1, 'nothing new may be spawned');
 });

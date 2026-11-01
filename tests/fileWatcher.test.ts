@@ -119,3 +119,51 @@ test('FileWatcherService: excludes filter raw events', () => {
 	assert.deepEqual(batches.flat().map(c => c.resource.fsPath.replace(/\\/g, '/')), ['/w/keep.txt']);
 	service.dispose();
 });
+
+// The two separator bugs below were Windows-only, and the cases above only expose them on
+// Windows because `URI.file('/a/dir').fsPath` contains no backslash on macOS or Linux. These
+// build paths that contain backslashes on EVERY platform, so a regression fails everywhere.
+
+test('coalesce: a deleted folder suppresses children when the paths use backslashes', () => {
+	// isParent() compared against a hardcoded '/', so on Windows a deleted folder never
+	// suppressed its children and consumers saw N events instead of one.
+	const result = coalesceEvents([
+		change('\\a\\dir', FileChangeType.DELETED),
+		change('\\a\\dir\\x', FileChangeType.DELETED),
+		change('\\a\\dir\\y', FileChangeType.DELETED),
+		change('\\a\\other', FileChangeType.DELETED)
+	]);
+	assert.equal(result.length, 2, 'the two child deletes must be collapsed into the folder');
+	assert.deepEqual(types(result).sort(), ['/a/dir:D', '/a/other:D']);
+});
+
+test('excludes match a path segment when the path uses backslashes', () => {
+	// matchesExclude() split on '/' only, so on Windows a path had one segment and every
+	// exclude was silently ignored — every change under node_modules got reported.
+	const batches: IFileChange[][] = [];
+	let capturedTimer: (() => void) | undefined;
+	const service = new FileWatcherService(
+		{
+			watch: (_root, _recursive, onRawEvent) => {
+				onRawEvent('\\w\\keep.txt', FileChangeType.UPDATED);
+				onRawEvent('\\w\\node_modules\\skip.txt', FileChangeType.UPDATED);
+				return { dispose: () => { /* fake */ } };
+			}
+		},
+		changes => batches.push(changes),
+		() => true,
+		() => 0,
+		callback => {
+			capturedTimer = callback;
+			return 1;
+		}
+	);
+	service.watch({ resource: URI.file('/w'), recursive: true, excludes: ['/node_modules'] });
+	capturedTimer?.();
+	assert.deepEqual(
+		batches.flat().map(c => c.resource.fsPath.replace(/\\/g, '/')),
+		['/w/keep.txt'],
+		'the node_modules path must be excluded even spelled with backslashes'
+	);
+	service.dispose();
+});

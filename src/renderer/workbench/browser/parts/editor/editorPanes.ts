@@ -18,6 +18,7 @@ import { SuggestController } from '../../../../editor/contrib/suggest/suggestCon
 import { EditorPane, IEditorViewState } from '../../../common/editor/editorPane.js';
 import { EditorInput, EditorInputCapabilities } from '../../../common/editor/editorInput.js';
 import { BreakpointDecorations } from '../../../contrib/debug/browser/breakpointDecorations.js';
+import { FindController, FindWidgetVisibleContext, registerFindController } from '../../../../editor/contrib/find/findController.js';
 import type { DebugService } from '../../../services/debug/browser/debugService.js';
 import { TextEditorInput } from '../../../common/editor/textEditorInput.js';
 import { CodeEditorService } from '../../../services/editor/browser/codeEditorService.js';
@@ -56,6 +57,13 @@ export class TextEditorPane extends EditorPane {
 		this._register(new SuggestController(this._widget, _services, () => input.resource));
 		this._register(new HoverController(this._widget, _services, () => input.resource));
 		this._register(new MarkerDecorations(this._widget, _services.markers, () => input.resource));
+
+		// in-editor find and replace. The visibility context key is bound here because this is
+		// where the context key service is in scope; the widget wins Escape while it is open.
+		const find = this._register(new FindController(this._widget));
+		registerFindController(this._widget, find);
+		const findVisible = FindWidgetVisibleContext.bindTo(_services.contextKeyService);
+		this._register(find.onDidChangeVisibility(visible => findVisible.set(visible)));
 		// A2-2: gutter breakpoints, reusing 12's margin-layer mechanism
 		if (_services.debugService) {
 			this._register(new BreakpointDecorations(this._widget, _services.debugService, () => input.resource));

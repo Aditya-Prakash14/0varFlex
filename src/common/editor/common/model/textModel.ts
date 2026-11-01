@@ -5,9 +5,10 @@
 //
 // shortcut: no snapshot support (createSnapshot/applySnapshot) and no TextModelPart decomposition —
 // async consumers re-read by range instead. Revisit when 12 lands.
-// shortcut: no in-model search/word helpers (in-editor find is not in the course core).
+// in-model search now lives in textModelSearch.ts; `findMatches` below is its model-facing form.
 
 import { Emitter, Event } from '../../../base/common/event.js';
+import { findMatches, IFindMatchesResult, ISearchParams } from './textModelSearch.js';
 import { Disposable } from '../../../base/common/lifecycle.js';
 import { Position } from '../core/position.js';
 import { Range } from '../core/range.js';
@@ -155,6 +156,15 @@ export class TextModel extends Disposable {
 	private _increaseVersionId(): void {
 		this._versionId = this._versionId + 1;
 		this._alternativeVersionId = this._versionId;
+	}
+
+	/**
+	 * Every match of `params` in this model, in document order. The find widget, Find All and a
+	 * future rename all read from here rather than re-implementing matching.
+	 */
+	findMatches(params: ISearchParams, options?: { captureMatches?: boolean; limit?: number; searchRange?: Range }): IFindMatchesResult {
+		this._assertNotDisposed();
+		return findMatches(this, params, options);
 	}
 
 	//#endregion

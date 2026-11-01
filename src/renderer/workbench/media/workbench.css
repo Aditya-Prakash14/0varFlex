@@ -2243,3 +2243,117 @@ body {
 	line-height: 1.45;
 	white-space: pre;
 }
+
+/* ---- in-editor find and replace ---- */
+
+.editor-find-widget {
+	position: absolute;
+	top: 0;
+	right: 18px;
+	z-index: 20;
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	padding: 6px 8px;
+	background: #353535;
+	border: 1px solid #454545;
+	border-top: none;
+	border-radius: 0 0 3px 3px;
+	box-shadow: 0 2px 8px rgba(0, 0, 0, 0.36);
+}
+
+.find-row,
+.find-replace-row {
+	display: flex;
+	align-items: center;
+	gap: 4px;
+}
+
+.find-input {
+	width: 180px;
+	height: 22px;
+	padding: 0 6px;
+	background: #3c3c3c;
+	color: var(--mini-foreground);
+	border: 1px solid #3c3c3c;
+	border-radius: 2px;
+	outline: none;
+	font-family: inherit;
+	font-size: 12px;
+}
+
+.find-input:focus {
+	border-color: var(--mini-accent);
+}
+
+.find-count {
+	min-width: 70px;
+	font-size: 11px;
+	color: var(--mini-watermark-dim);
+	white-space: nowrap;
+}
+
+.find-count.no-results {
+	color: #f48771;
+}
+
+.find-toggles,
+.find-nav {
+	display: flex;
+	gap: 2px;
+}
+
+.find-toggle,
+.find-button {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 20px;
+	height: 20px;
+	font-size: 10px;
+	border-radius: 3px;
+	cursor: pointer;
+	user-select: none;
+	color: var(--mini-activitybar-foreground);
+	outline: none;
+}
+
+.find-toggle:hover,
+.find-button:hover {
+	background: rgba(255, 255, 255, 0.1);
+	color: var(--mini-foreground);
+}
+
+.find-toggle:focus-visible,
+.find-button:focus-visible {
+	outline: 1px solid var(--mini-accent);
+}
+
+.find-toggle.checked {
+	background: rgba(0, 120, 212, 0.4);
+	color: #ffffff;
+}
+
+.find-button {
+	width: 22px;
+	font-size: 11px;
+}
+
+/* the match highlights live in content space, behind the text */
+.editor-find-matches {
+	position: absolute;
+	inset: 0;
+	pointer-events: none;
+}
+
+.find-match {
+	position: absolute;
+	height: 1.35em;
+	background: rgba(234, 92, 0, 0.33);
+	border-radius: 2px;
+}
+
+.find-match.current {
+	background: rgba(234, 92, 0, 0.6);
+	outline: 1px solid #f38518;
+}

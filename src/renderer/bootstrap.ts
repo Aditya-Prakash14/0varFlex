@@ -20,6 +20,7 @@ import { Selection } from './editor/browser/core/selection.js';
 import { registerEditorCommands } from './editor/browser/editorWidget.js';
 import { registerHoverCommands, hoverControllerFor } from './editor/contrib/hover/hoverController.js';
 import { registerSuggestCommands, suggestControllerFor } from './editor/contrib/suggest/suggestController.js';
+import { findControllerFor, registerFindCommands } from './editor/contrib/find/findController.js';
 import { TextEditorInput } from './workbench/common/editor/textEditorInput.js';
 import { CommandMetadata, CommandsRegistry, ICommandService } from './platform/commands/common/commands.js';
 import { ContextKeyExpr, RawContextKey } from './platform/contextkey/common/contextkey.js';
@@ -363,6 +364,8 @@ async function main(): Promise<void> {
 	});
 	// 12: the language contrib commands resolve the ACTIVE editor's controllers (like 09's pattern)
 	registerSuggestCommands(() => suggestControllerFor(getActiveWidget()));
+	// in-editor find: Ctrl+F / Ctrl+H / F3, resolved against the active editor's controller
+	registerFindCommands(() => findControllerFor(getActiveWidget()));
 	registerHoverCommands(() => hoverControllerFor(getActiveWidget()));
 	registerProblemsView({
 		markers: markerService,

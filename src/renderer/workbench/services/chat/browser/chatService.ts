@@ -51,7 +51,12 @@ export class ChatService extends Disposable {
 		return this._channel.isConfigured();
 	}
 
-	async send(prompt: string, options: { workspaceRoot: URI | undefined; allowCommands: boolean }): Promise<void> {
+	async send(prompt: string, options: {
+		workspaceRoot: URI | undefined;
+		allowCommands: boolean;
+		activeFile?: URI;
+		selectionText?: string;
+	}): Promise<void> {
 		if (this._busy || !prompt.trim()) {
 			return;
 		}
@@ -63,7 +68,9 @@ export class ChatService extends Disposable {
 			sessionId: ChatService.SESSION_ID,
 			prompt,
 			workspaceRoot: options.workspaceRoot?.fsPath,
-			allowCommands: options.allowCommands
+			allowCommands: options.allowCommands,
+			activeFile: options.activeFile?.fsPath,
+			selectionText: options.selectionText
 		});
 	}
 

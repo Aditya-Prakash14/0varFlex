@@ -2211,3 +2211,35 @@ body {
 	color: var(--mini-watermark-dim);
 	min-height: 14px;
 }
+
+/* the chat transcript reuses 12's markdown-lite, whose classes are styled for hovers */
+.chat-entry-text .hover-para {
+	margin: 0 0 6px;
+	white-space: pre-wrap;
+	word-break: break-word;
+}
+
+.chat-entry-text .hover-para:last-child {
+	margin-bottom: 0;
+}
+
+.chat-entry-text code {
+	padding: 1px 4px;
+	border-radius: 2px;
+	background: rgba(255, 255, 255, 0.1);
+	font-family: var(--mini-editor-font-family, Menlo, Consolas, monospace);
+	font-size: 11px;
+}
+
+.chat-entry-text .hover-code {
+	margin: 6px 0;
+	padding: 6px 8px;
+	overflow-x: auto;
+	border-radius: 3px;
+	background: #1e1e1e;
+	border: 1px solid var(--mini-border);
+	font-family: var(--mini-editor-font-family, Menlo, Consolas, monospace);
+	font-size: 11px;
+	line-height: 1.45;
+	white-space: pre;
+}

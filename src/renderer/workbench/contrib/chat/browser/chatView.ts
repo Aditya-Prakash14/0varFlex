@@ -16,6 +16,7 @@ import { Disposable, DisposableStore } from '../../../../../common/base/common/l
 import { URI } from '../../../../../common/base/common/uri.js';
 import { IContextKey, IContextKeyService, RawContextKey } from '../../../../platform/contextkey/common/contextkey.js';
 import { addDisposableListener, append, $ } from '../../../../base/browser/dom.js';
+import { renderMarkdownLite } from '../../../../editor/contrib/hover/hoverController.js';
 import type { ChatService } from '../../../services/chat/browser/chatService.js';
 
 export const ChatViewFocusContext = new RawContextKey<boolean>('chatViewFocus', false);
@@ -26,6 +27,8 @@ export interface IChatViewServices {
 	getWorkspaceRoot(): URI | undefined;
 	/** read from configuration each send, so toggling the setting takes effect at once */
 	allowCommands(): boolean;
+	/** what the user is looking at, so the agent does not have to ask */
+	getEditorContext(): { activeFile?: URI; selectionText?: string };
 }
 
 export class ChatView extends Disposable {
@@ -109,9 +112,12 @@ export class ChatView extends Disposable {
 		}
 
 		this._input.value = '';
+		const editorContext = this._services.getEditorContext();
 		await chatService.send(prompt, {
 			workspaceRoot: this._services.getWorkspaceRoot(),
-			allowCommands: this._services.allowCommands()
+			allowCommands: this._services.allowCommands(),
+			activeFile: editorContext.activeFile,
+			selectionText: editorContext.selectionText
 		});
 	}
 
@@ -141,8 +147,15 @@ export class ChatView extends Disposable {
 				} else if (entry.kind === 'assistant') {
 					append(row, $('.chat-entry-label', {}, 'Agent'));
 				}
-				// textContent: this is model output and file text, never markup
-				append(row, $('.chat-entry-text', {}, entry.text));
+				const text = append(row, $('.chat-entry-text'));
+				if (entry.kind === 'assistant') {
+					// reuse 12's markdown-lite: paragraphs, `inline code` and ``` fences. It
+					// builds text nodes only, so model output still cannot inject markup.
+					renderMarkdownLite(text, entry.text);
+				} else {
+					// textContent: this is user input and error text, never markup
+					text.textContent = entry.text;
+				}
 			}
 		}
 

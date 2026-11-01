@@ -20,6 +20,7 @@
 //     validation and the tolerant parser can hand back a truncated object.
 
 import Anthropic from '@anthropic-ai/sdk';
+import * as nodePath from 'node:path';
 import { Emitter, Event } from '../../common/base/common/event.js';
 import { Disposable } from '../../common/base/common/lifecycle.js';
 import type { ILogService } from '../../common/platform/log/common/log.js';
@@ -32,6 +33,8 @@ const MAX_TOKENS = 64_000;
 const MAX_ITERATIONS = 40;
 /** re-issue a turn at most twice when a tool input arrives unparseable */
 const MAX_JSON_RETRIES = 2;
+/** past this the user gets a nudge to start a new chat (history is never trimmed silently) */
+const LONG_CONVERSATION_MESSAGES = 60;
 
 const SYSTEM_PROMPT = `You are the coding agent built into 0varflex, a code editor.
 
@@ -50,8 +53,30 @@ How to work:
 
 Paths you pass to tools are relative to the workspace folder. A path outside it is refused.`;
 
+/**
+ * The three things this loop uses from an SDK stream. Declaring the seam rather than importing
+ * the SDK's generic stream type keeps a test fake to three methods instead of a whole class.
+ */
+export interface IAgentStream {
+	on(event: 'text', listener: (delta: string) => void): unknown;
+	finalMessage(): Promise<Anthropic.Message>;
+	abort(): void;
+}
+
+/** the slice of the SDK this loop uses, so a test can stand in for it */
+export interface IMessagesClient {
+	readonly messages: {
+		stream(params: Anthropic.MessageCreateParamsNonStreaming): IAgentStream;
+	};
+}
+
 export interface IAgentSessionServices {
 	readonly logService: ILogService;
+	/**
+	 * Injected so the loop can be driven by a fake client in tests. Production leaves it unset
+	 * and the SDK resolves credentials itself.
+	 */
+	readonly createClient?: () => IMessagesClient;
 	/** reuses the editor's own search engine instead of standing up a second one */
 	searchFiles(root: string, pattern: string, isRegExp: boolean): Promise<readonly { path: string; line: number; text: string }[]>;
 }
@@ -64,7 +89,9 @@ export class AgentService extends Disposable {
 	private readonly _onDidChangeFiles = this._register(new Emitter<IWireAgentFileChange>());
 	readonly onDidChangeFiles: Event<IWireAgentFileChange> = this._onDidChangeFiles.event;
 
-	private _client: Anthropic | undefined;
+	private _client: IMessagesClient | undefined;
+	/** the in-flight stream per session, so cancel can actually abort the request */
+	private readonly _streams = new Map<string, IAgentStream>();
 	/** conversation history per session, so a follow-up question keeps the context */
 	private readonly _history = new Map<string, Anthropic.MessageParam[]>();
 	private readonly _cancelled = new Set<string>();
@@ -79,9 +106,12 @@ export class AgentService extends Disposable {
 	 * `ant auth login` profile. We never read, store or log a key — an unset env var does not
 	 * mean there is no credential.
 	 */
-	private client(): Anthropic {
+	private client(): IMessagesClient {
 		if (!this._client) {
-			this._client = new Anthropic();
+			// one narrow cast at the injection seam: the SDK's stream is a superset of IAgentStream
+			this._client = this._services.createClient
+				? this._services.createClient()
+				: (new Anthropic() as unknown as IMessagesClient);
 		}
 		return this._client;
 	}
@@ -97,9 +127,13 @@ export class AgentService extends Disposable {
 	}
 
 	async cancel(sessionId: string): Promise<void> {
-		if (this._running.has(sessionId)) {
-			this._cancelled.add(sessionId);
+		if (!this._running.has(sessionId)) {
+			return;
 		}
+		this._cancelled.add(sessionId);
+		// Abort the HTTP request too. Setting a flag alone left the model generating — and
+		// billing — until the turn finished on its own, which is not what Stop means.
+		this._streams.get(sessionId)?.abort();
 	}
 
 	async send(request: IWireAgentRequest): Promise<void> {
@@ -133,8 +167,17 @@ export class AgentService extends Disposable {
 	private async _runTurn(request: IWireAgentRequest, workspaceRoot: string): Promise<void> {
 		const { sessionId } = request;
 		const messages = this._history.get(sessionId) ?? [];
-		messages.push({ role: 'user', content: request.prompt });
+		messages.push({ role: 'user', content: buildUserMessage(request, workspaceRoot) });
 		this._history.set(sessionId, messages);
+
+		if (messages.length > LONG_CONVERSATION_MESSAGES) {
+			// no silent trimming: dropping messages would split a tool_use from its tool_result
+			// and the API would reject the next request. Tell the user instead.
+			this._emit({
+				kind: 'tool-end', sessionId, tool: 'context', ok: true,
+				summary: 'This chat is getting long — "New" starts a fresh one if replies slow down.'
+			});
+		}
 
 		const toolContext: IAgentToolContext = {
 			workspaceRoot,
@@ -169,7 +212,9 @@ export class AgentService extends Disposable {
 				messages
 			});
 
-			stream.on('text', delta => {
+			this._streams.set(sessionId, stream);
+
+			stream.on('text', (delta: string) => {
 				if (!this._cancelled.has(sessionId)) {
 					this._emit({ kind: 'text', sessionId, delta });
 				}
@@ -180,6 +225,12 @@ export class AgentService extends Disposable {
 				message = await stream.finalMessage();
 				jsonRetries = 0; // the cap is on consecutive failures of one turn
 			} catch (error) {
+				// an abort is the user pressing Stop, not a failure
+				if (error instanceof Anthropic.APIUserAbortError || this._cancelled.has(sessionId)) {
+					this._publishChanges(sessionId, changedPaths);
+					this._emit({ kind: 'done', sessionId, stopReason: 'cancelled', inputTokens, outputTokens });
+					return;
+				}
 				// eager input streaming means the SDK rejects when a tool input will not parse
 				// at all. Only that is retried; a real API error is rethrown.
 				if (error instanceof Anthropic.APIError || jsonRetries++ >= MAX_JSON_RETRIES) {
@@ -187,6 +238,8 @@ export class AgentService extends Disposable {
 				}
 				this._services.logService.warn('agent: a tool input was not parseable JSON, re-issuing the turn');
 				continue;
+			} finally {
+				this._streams.delete(sessionId);
 			}
 
 			inputTokens += message.usage.input_tokens;
@@ -341,4 +394,46 @@ export function describeError(error: unknown): string {
 		return `API error ${error.status ?? ''}: ${error.message}`.trim();
 	}
 	return (error as Error)?.message ?? String(error);
+}
+
+/**
+ * Build the user turn, with the editor context the agent would otherwise have to ask for.
+ *
+ * The active file is given as a workspace-relative path, because that is the only form the tools
+ * accept — handing the model an absolute path would teach it to send one back and every tool
+ * call would be refused.
+ */
+export function buildUserMessage(
+	request: { prompt: string; activeFile?: string; selectionText?: string },
+	workspaceRoot: string
+): string {
+	const context: string[] = [];
+
+	if (request.activeFile) {
+		const relative = toWorkspaceRelative(workspaceRoot, request.activeFile);
+		if (relative) {
+			context.push(`Active editor: ${relative}`);
+		}
+	}
+	if (request.selectionText && request.selectionText.trim()) {
+		// a long selection is clipped: it is context, not the task
+		const clipped = request.selectionText.length > 4000
+			? `${request.selectionText.slice(0, 4000)}\n… selection truncated …`
+			: request.selectionText;
+		context.push(`Selected text:\n\`\`\`\n${clipped}\n\`\`\``);
+	}
+
+	return context.length > 0
+		? `${context.join('\n')}\n\n${request.prompt}`
+		: request.prompt;
+}
+
+/** a workspace-relative path, or undefined when the file is outside the folder */
+export function toWorkspaceRelative(workspaceRoot: string, absolutePath: string): string | undefined {
+	const relative = nodePath.relative(workspaceRoot, absolutePath);
+	if (!relative || relative.startsWith('..') || nodePath.isAbsolute(relative)) {
+		return undefined;
+	}
+	// the tools take forward slashes on every platform
+	return relative.split(nodePath.sep).join('/');
 }

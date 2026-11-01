@@ -463,7 +463,13 @@ async function main(): Promise<void> {
 		chatService,
 		contextKeyService,
 		getWorkspaceRoot: () => workspaceContext.folder?.uri,
-		allowCommands: () => configurationService.getValue<boolean>(ALLOW_COMMANDS_SETTING) === true
+		allowCommands: () => configurationService.getValue<boolean>(ALLOW_COMMANDS_SETTING) === true,
+		getEditorContext: () => {
+			const activeFile = editorService.activeInput?.getResource() ?? undefined;
+			const widget = getActiveWidget();
+			const selectionText = widget?.getSelectedText() || undefined;
+			return { activeFile, selectionText };
+		}
 	});
 
 	// the agent edited files on disk: reload any editor showing them, the same path an external

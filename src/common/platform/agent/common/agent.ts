@@ -22,6 +22,12 @@ export interface IWireAgentRequest {
 	readonly workspaceRoot?: string;
 	/** running commands is off unless the user turned it on (see agent.allowCommands) */
 	readonly allowCommands: boolean;
+	/**
+	 * What the user is looking at. A chat agent inside an editor that cannot see the open file
+	 * makes the user paste paths by hand, so this travels with every message.
+	 */
+	readonly activeFile?: string;
+	readonly selectionText?: string;
 }
 
 /**

@@ -25,18 +25,33 @@ function makeLogService(): ILogService {
 	};
 }
 
+/** poll until `condition` holds, or fail loudly — never a bare sleep tuned to a fast machine */
+async function waitFor(condition: () => boolean, timeoutMs = 5000): Promise<void> {
+	const deadline = Date.now() + timeoutMs;
+	while (!condition()) {
+		if (Date.now() > deadline) {
+			throw new Error(`condition did not become true within ${timeoutMs}ms`);
+		}
+		await new Promise(resolve => setTimeout(resolve, 5));
+	}
+}
+
 test('storage: sync reads, debounced writes, markers, flush and recovery', async () => {
 	const dir = await mkdtemp(path.join(os.tmpdir(), 'mini-storage-'));
 
 	try {
 		const main = new StorageMainService(dir);
 		let flushCalls = 0;
+		/** the in-flight write, so a test can await the FILE rather than guess at a duration */
+		let lastFlush: Promise<unknown> = Promise.resolve();
 		const channel = {
 			call: <T>(command: string, arg?: unknown[]): Promise<T> => {
+				const result = main.call(undefined, command, arg) as Promise<T>;
 				if (command === 'flushUpdates') {
 					flushCalls++;
+					lastFlush = result;
 				}
-				return main.call(undefined, command, arg) as Promise<T>;
+				return result;
 			},
 			listen: (() => { throw new Error('no events'); }) as unknown as IChannel['listen']
 		};
@@ -55,8 +70,15 @@ test('storage: sync reads, debounced writes, markers, flush and recovery', async
 		storage.store('key4', 'v4', StorageScope.APPLICATION);
 		storage.store('key5', 'v5', StorageScope.APPLICATION);
 		assert.equal(storage.get('key1', StorageScope.APPLICATION), 'v1'); // written to cache synchronously
-		await new Promise(resolve => setTimeout(resolve, 100));
+
+		// Wait for the write to HAPPEN rather than for a fixed 100ms. The debounce is 30ms, but
+		// this file runs alongside 25 others, and a loaded machine can fire that timer late —
+		// which made this test fail intermittently. The coalescing claim is unchanged: if the
+		// five stores did not coalesce, flushCalls lands above 1 and the assert below still fails.
+		await waitFor(() => flushCalls >= 1);
 		assert.equal(flushCalls, 1, 'five rapid stores must coalesce into one write');
+		// the counter increments when the write is DISPATCHED; the file lands when it resolves
+		await lastFlush;
 
 		// the file exists with the real shape: values + marker keys
 		const raw = JSON.parse(await readFile(main.getFilePath(StorageScope.APPLICATION), 'utf8'));

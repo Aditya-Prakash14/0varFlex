@@ -21,8 +21,15 @@ function pathsEqual(a: string, b: string): boolean {
 	return a.toLowerCase() === b.toLowerCase();
 }
 
+/**
+ * `fsPath` uses the platform's separator, so comparing with a hardcoded `/` meant this returned
+ * false for every path on Windows — a deleted folder then failed to suppress its children's
+ * DELETE events, and consumers saw N events instead of one.
+ */
 function isParent(parent: string, child: string): boolean {
-	return child.startsWith(parent.endsWith('/') ? parent : parent + '/');
+	const normalizedParent = parent.replace(/\\/g, '/').replace(/\/+$/, '');
+	const normalizedChild = child.replace(/\\/g, '/');
+	return normalizedChild.startsWith(normalizedParent + '/');
 }
 
 /**
@@ -35,7 +42,9 @@ function matchesExclude(fsPath: string, exclude: string): boolean {
 	if (!segment) {
 		return false;
 	}
-	return fsPath.split('/').includes(segment);
+	// split on BOTH separators: on Windows `\w\node_modules\x` has no `/`, so splitting on `/`
+	// alone produced a single segment and every exclude was silently ignored
+	return fsPath.split(/[\\/]/).includes(segment);
 }
 
 // ---- EventCoalescer (ported from watcher.ts)

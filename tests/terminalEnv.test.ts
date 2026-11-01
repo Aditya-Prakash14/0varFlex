@@ -40,8 +40,17 @@ test('sanitizePtyEnv keeps an existing TERM', () => {
 
 test('resolveDefaultShell uses $SHELL and falls back sanely', () => {
 	assert.equal(resolveDefaultShell({ SHELL: '/bin/bash' }), '/bin/bash');
-	assert.equal(resolveDefaultShell({ SHELL: '' }), process.platform === 'win32' ? (process.env.COMSPEC ?? 'cmd.exe') : '/bin/zsh');
-	assert.equal(resolveDefaultShell({}), process.platform === 'win32' ? (process.env.COMSPEC ?? 'cmd.exe') : '/bin/zsh');
+
+	// The fallback reads COMSPEC from the env it was GIVEN, exactly as it reads SHELL from it —
+	// not from process.env. These envs carry neither, so the last-resort default applies.
+	const fallback = process.platform === 'win32' ? 'cmd.exe' : '/bin/zsh';
+	assert.equal(resolveDefaultShell({ SHELL: '' }), fallback);
+	assert.equal(resolveDefaultShell({}), fallback);
+
+	// and COMSPEC from the given env wins over that default on Windows
+	if (process.platform === 'win32') {
+		assert.equal(resolveDefaultShell({ COMSPEC: 'C:\\Windows\\System32\\cmd.exe' }), 'C:\\Windows\\System32\\cmd.exe');
+	}
 });
 
 test('formatMessageForTerminal is the ported " * message " banner', () => {

@@ -24,6 +24,8 @@ import * as vscode from 'vscode';
 import { parsePorcelain } from './porcelain.js';
 
 const POLL_INTERVAL_MS = 5000;
+/** the same debounce the search box uses — one status call per typing run, not per keystroke */
+const EDIT_DEBOUNCE_MS = 300;
 
 /** letters → a human tooltip, mirroring the real decorations' tooltips */
 const TOOLTIPS: { [letter: string]: string } = {
@@ -119,6 +121,8 @@ export async function activate(context: {
 
 	let refreshing = false;
 	let pending = false;
+	/** the last status we published, as `letter path` lines — used to skip no-op updates */
+	let lastSignature = '';
 
 	async function refresh(): Promise<void> {
 		if (refreshing) {
@@ -133,6 +137,16 @@ export async function activate(context: {
 				return;
 			}
 			const entries = parsePorcelain(result.stdout);
+
+			// Assigning resourceStates always fires a change, which costs an RPC round trip and a
+			// full repaint of the view. Polling every 5s means that happened forever even when
+			// nothing had changed, so compare first and only publish real changes.
+			const signature = entries.map(entry => `${entry.letter} ${entry.path}`).join('\n');
+			if (signature === lastSignature) {
+				return;
+			}
+			lastSignature = signature;
+
 			changes.resourceStates = entries.map(entry => ({
 				resourceUri: vscode.Uri.file(path.join(repoRoot, entry.path)),
 				decorations: {
@@ -152,11 +166,29 @@ export async function activate(context: {
 		}
 	}
 
-	// saves are the cheap signal that something changed; the timer catches everything else
-	// (a `git checkout` in a terminal, an external edit)
-	context.subscriptions.push(vscode.workspace.onDidChangeTextDocument(() => void refresh()));
+	// Edits are the cheap signal that something changed, but onDidChangeTextDocument fires per
+	// KEYSTROKE and each refresh spawns a `git status`. Debounce at the same 300ms the search
+	// box uses, so a typing run ends in one status call instead of a chain of them.
+	let editTimer: ReturnType<typeof setTimeout> | undefined;
+	context.subscriptions.push(vscode.workspace.onDidChangeTextDocument(() => {
+		if (editTimer !== undefined) {
+			clearTimeout(editTimer);
+		}
+		editTimer = setTimeout(() => {
+			editTimer = undefined;
+			void refresh();
+		}, EDIT_DEBOUNCE_MS);
+	}));
+
+	// the timer catches everything an edit does not (a `git checkout` in a terminal, an
+	// external edit, a commit from another tool)
 	const timer = setInterval(() => void refresh(), POLL_INTERVAL_MS);
-	context.subscriptions.push(new vscode.Disposable(() => clearInterval(timer)));
+	context.subscriptions.push(new vscode.Disposable(() => {
+		clearInterval(timer);
+		if (editTimer !== undefined) {
+			clearTimeout(editTimer);
+		}
+	}));
 
 	await refresh();
 	console.log(`git-lite: tracking ${repoRoot}`);

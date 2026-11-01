@@ -684,13 +684,35 @@ async function main(): Promise<void> {
 
 	// A2-3: the task system. It reuses 13's pty (spawning the command directly), 12's markers
 	// for problems and 04's quick pick for selection — no new subsystem.
+	// A2-3 trust gate: tasks come from files inside the folder, so running one is running code
+	// the folder's author wrote. Ask once per folder and remember the answer.
+	const trustedTaskFolders = new Set(storage.getObject<string[]>('tasks.trustedFolders', StorageScope.APPLICATION) ?? []);
+	const isTaskFolderTrusted = async (folder: URI): Promise<boolean> => {
+		const key = folder.fsPath;
+		if (trustedTaskFolders.has(key)) {
+			return true;
+		}
+		const answer = await notifications.show({
+			severity: 'warning',
+			message: `Run tasks from ${folder.fsPath}? Tasks are defined by this folder's own files and can run any command.`,
+			items: ['Run Tasks', 'Cancel']
+		});
+		if (answer !== 'Run Tasks') {
+			return false;
+		}
+		trustedTaskFolders.add(key);
+		storage.store('tasks.trustedFolders', [...trustedTaskFolders], StorageScope.APPLICATION);
+		return true;
+	};
+
 	const taskService = new TaskService({
 		terminalService,
 		fileService,
 		markers: markerService,
 		logService,
 		getWorkspaceFolder: () => workspaceContext.folder?.uri,
-		getActiveFile: () => editorService.activeInput?.getResource()
+		getActiveFile: () => editorService.activeInput?.getResource(),
+		isTrusted: isTaskFolderTrusted
 	});
 	const taskPanel = new TaskPanel(workbench.layout.panel, taskService, visible => workbench.layout.setPanelVisible(visible));
 	registerTaskActions({

@@ -13,7 +13,10 @@ function change(path: string, type: FileChangeType): IFileChange {
 }
 
 function types(changes: IFileChange[]): string[] {
-	return changes.map(c => `${c.resource.fsPath}:${c.type === FileChangeType.ADDED ? 'A' : c.type === FileChangeType.DELETED ? 'D' : 'U'}`);
+	// `fsPath` is platform-dependent by design (`\` on Windows). These cases are about WHICH
+	// path got WHICH status, not about separator spelling — uri.test.ts owns that — so compare
+	// one canonical spelling and keep the assertions platform-independent.
+	return changes.map(c => `${c.resource.fsPath.replace(/\\/g, '/')}:${c.type === FileChangeType.ADDED ? 'A' : c.type === FileChangeType.DELETED ? 'D' : 'U'}`);
 }
 
 test('coalesce: add then delete in one batch cancels out', () => {
@@ -112,6 +115,7 @@ test('FileWatcherService: excludes filter raw events', () => {
 	);
 	service.watch({ resource: URI.file('/w'), recursive: true, excludes: ['/node_modules'] });
 	capturedTimer?.();
-	assert.deepEqual(batches.flat().map(c => c.resource.fsPath), ['/w/keep.txt']);
+	// one canonical spelling: this asserts WHICH file survived the exclude, not the separator
+	assert.deepEqual(batches.flat().map(c => c.resource.fsPath.replace(/\\/g, '/')), ['/w/keep.txt']);
 	service.dispose();
 });

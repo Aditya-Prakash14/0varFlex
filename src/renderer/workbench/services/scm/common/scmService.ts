@@ -43,6 +43,13 @@ export interface ISCMRepository {
 export class SCMService extends Disposable {
 
 	private readonly _repositories = new Map<number, ISCMRepository>();
+	/**
+	 * The last input value we sent to each provider. An incoming value that differs from this is
+	 * one the PROVIDER changed (it cleared the box after a commit, or filled in a template), so
+	 * it wins. An incoming value equal to it is just an echo of the user's own typing and is
+	 * ignored, which is what keeps the caret from jumping mid-word.
+	 */
+	private readonly _lastSentToProvider = new Map<number, string>();
 
 	private readonly _onDidChangeRepositories = this._register(new Emitter<void>());
 	readonly onDidChangeRepositories: Event<void> = this._onDidChangeRepositories.event;
@@ -80,6 +87,7 @@ export class SCMService extends Disposable {
 	}
 
 	unregisterSourceControl(handle: number): void {
+		this._lastSentToProvider.delete(handle);
 		if (this._repositories.delete(handle)) {
 			this._onDidChangeRepositories.fire();
 		}
@@ -106,9 +114,10 @@ export class SCMService extends Disposable {
 				}))
 			})),
 			inputBoxPlaceholder: state.inputBoxPlaceholder,
-			// the workbench owns the caret: keep what the user is typing rather than echoing the
-			// provider's copy back and resetting the cursor mid-word
-			inputBoxValue: existing.inputBoxValue,
+			// the provider changed it → take it; otherwise it is an echo of our own value
+			inputBoxValue: state.inputBoxValue !== (this._lastSentToProvider.get(handle) ?? '')
+				? state.inputBoxValue
+				: existing.inputBoxValue,
 			acceptCommand: state.acceptCommand,
 			count: state.count
 		});
@@ -124,16 +133,7 @@ export class SCMService extends Disposable {
 			return;
 		}
 		this._repositories.set(handle, { ...existing, inputBoxValue: value });
+		this._lastSentToProvider.set(handle, value);
 		this._inputSink?.(handle, value);
-	}
-
-	/** after a successful commit the provider clears the box through here */
-	clearInputBox(handle: number): void {
-		const existing = this._repositories.get(handle);
-		if (existing && existing.inputBoxValue !== '') {
-			this._repositories.set(handle, { ...existing, inputBoxValue: '' });
-			this._inputSink?.(handle, '');
-			this._onDidChangeRepositories.fire();
-		}
 	}
 }

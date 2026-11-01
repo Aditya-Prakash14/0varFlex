@@ -10,7 +10,7 @@
 // thread grouping (one thread), no drag to reorder.
 
 import { Emitter, Event } from '../../../../../common/base/common/event.js';
-import { Disposable } from '../../../../../common/base/common/lifecycle.js';
+import { Disposable, DisposableStore } from '../../../../../common/base/common/lifecycle.js';
 import { URI } from '../../../../../common/base/common/uri.js';
 import { IContextKey, IContextKeyService, RawContextKey } from '../../../../platform/contextkey/common/contextkey.js';
 import { addDisposableListener, append, $ } from '../../../../base/browser/dom.js';
@@ -48,6 +48,13 @@ export class DebugView extends Disposable {
 	private readonly _onDidChangeState = this._register(new Emitter<void>());
 	readonly onDidChangeState: Event<void> = this._onDidChangeState.event;
 
+	/**
+	 * Listeners for the CURRENT render only. render() runs on every state change — including
+	 * every line of program output — and rebuilds the toolbar, stack, variables and breakpoint
+	 * rows, so their listeners must die with them.
+	 */
+	private readonly _rowDisposables = this._register(new DisposableStore());
+
 	constructor(container: HTMLElement, private readonly _services: IDebugViewServices) {
 		super();
 
@@ -81,6 +88,7 @@ export class DebugView extends Disposable {
 	}
 
 	render(): void {
+		this._rowDisposables.clear();
 		const debugService = this._services.debugService;
 		const state = debugService.state;
 		this._inDebugMode.set(debugService.isActive);
@@ -93,8 +101,8 @@ export class DebugView extends Disposable {
 			if (!enabled) {
 				return;
 			}
-			this._register(addDisposableListener(element, 'click', run));
-			this._register(addDisposableListener(element, 'keydown', (event: KeyboardEvent) => {
+			this._rowDisposables.add(addDisposableListener(element, 'click', run));
+			this._rowDisposables.add(addDisposableListener(element, 'keydown', (event: KeyboardEvent) => {
 				if (event.key === 'Enter' || event.key === ' ') {
 					event.preventDefault();
 					run();
@@ -132,7 +140,7 @@ export class DebugView extends Disposable {
 				twisty.classList.toggle('expanded', scope.expanded);
 				append(header, $('span.debug-scope-name', {}, scope.name));
 				const reference = scope.variablesReference;
-				this._register(addDisposableListener(header, 'click', () => void debugService.toggleScope(reference)));
+				this._rowDisposables.add(addDisposableListener(header, 'click', () => void debugService.toggleScope(reference)));
 
 				if (scope.expanded) {
 					for (const variable of scope.variables) {
@@ -155,7 +163,7 @@ export class DebugView extends Disposable {
 				append(row, $('span.debug-breakpoint-name', {}, `${splitPath(breakpoint.path)}:${breakpoint.line}`));
 				const resource = URI.file(breakpoint.path);
 				const line = breakpoint.line;
-				this._register(addDisposableListener(row, 'click', () => this._services.openFrame(resource, line, 1)));
+				this._rowDisposables.add(addDisposableListener(row, 'click', () => this._services.openFrame(resource, line, 1)));
 			}
 		}
 
@@ -168,7 +176,7 @@ export class DebugView extends Disposable {
 		append(row, $('span.debug-frame-name', {}, frame.name));
 		append(row, $('span.debug-frame-line', {}, frame.path ? `${splitPath(frame.path)}:${frame.line}` : `line ${frame.line}`));
 
-		this._register(addDisposableListener(row, 'click', () => {
+		this._rowDisposables.add(addDisposableListener(row, 'click', () => {
 			void this._services.debugService.focusFrame(frame.id);
 			if (frame.path) {
 				this._services.openFrame(URI.file(frame.path), frame.line, frame.column);

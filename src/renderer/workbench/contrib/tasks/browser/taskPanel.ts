@@ -8,17 +8,15 @@
 // delta: the real system runs each task in a real terminal (with ANSI rendering, scrollback
 // search and links). This is a plain text pane, so ANSI escapes are stripped rather than drawn.
 //
-// shortcut: the pane keeps the whole output in one string and re-renders on a trailing timer;
-// an endless `watch` task would grow it without bound. Capped at MAX_OUTPUT_CHARS.
+// The output is stripped and capped by the task service as it arrives, so this pane only
+// assigns text — it never scans the buffer.
 
-import { Disposable } from '../../../../../common/base/common/lifecycle.js';
+import { Disposable, DisposableStore } from '../../../../../common/base/common/lifecycle.js';
 import { addDisposableListener, append, $ } from '../../../../base/browser/dom.js';
 import type { PanelPart } from '../../../browser/parts/panel/panelPart.js';
-import { stripAnsi, TaskService } from './taskService.js';
+import { TaskService } from './taskService.js';
 
 const TAB_GROUP_ID = 'tasks';
-/** a watch task would otherwise grow the pane forever */
-const MAX_OUTPUT_CHARS = 200_000;
 const RENDER_DEBOUNCE_MS = 50;
 
 export class TaskPanel extends Disposable {
@@ -31,6 +29,12 @@ export class TaskPanel extends Disposable {
 
 	private _visible = false;
 	private _renderTimer: ReturnType<typeof setTimeout> | undefined;
+
+	/**
+	 * Listeners for the CURRENT header only. _renderActions rebuilds the header on every task
+	 * state change, so its button listeners must die with the buttons.
+	 */
+	private readonly _actionDisposables = this._register(new DisposableStore());
 
 	constructor(
 		private readonly _panel: PanelPart,
@@ -82,6 +86,7 @@ export class TaskPanel extends Disposable {
 	}
 
 	private _renderActions(): void {
+		this._actionDisposables.clear();
 		this._actions.textContent = '';
 
 		const state = this._taskService.state;
@@ -101,8 +106,8 @@ export class TaskPanel extends Disposable {
 
 		const action = (label: string, title: string, run: () => void): void => {
 			const element = append(this._actions, $('span.task-action', { title, tabindex: '0' }, label));
-			this._register(addDisposableListener(element, 'click', run));
-			this._register(addDisposableListener(element, 'keydown', (event: KeyboardEvent) => {
+			this._actionDisposables.add(addDisposableListener(element, 'click', run));
+			this._actionDisposables.add(addDisposableListener(element, 'keydown', (event: KeyboardEvent) => {
 				if (event.key === 'Enter' || event.key === ' ') {
 					event.preventDefault();
 					run();
@@ -136,12 +141,10 @@ export class TaskPanel extends Disposable {
 		if (!this._visible) {
 			return; // nothing to paint while hidden; show() re-renders
 		}
-		let text = stripAnsi(this._taskService.output);
-		if (text.length > MAX_OUTPUT_CHARS) {
-			text = `… output truncated …\n${text.slice(text.length - MAX_OUTPUT_CHARS)}`;
-		}
-		// textContent, never innerHTML: this is process output
-		this._outputElement.textContent = text;
+		// The service already stripped escapes and capped the length as the bytes arrived, so
+		// this is a plain assignment — it never scans the buffer.
+		// textContent, never innerHTML: this is process output.
+		this._outputElement.textContent = this._taskService.output;
 		// follow the tail, like a terminal does
 		this._container.scrollTop = this._container.scrollHeight;
 	}

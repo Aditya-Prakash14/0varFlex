@@ -22,6 +22,20 @@ interface IEntry {
 	mtime: number;
 }
 
+/**
+ * One canonical spelling for every key in this provider.
+ *
+ * `URI.fsPath` is platform-dependent on purpose — it yields `\` on Windows, matching upstream.
+ * The tests, however, write POSIX paths (`/test/User/settings.json`), so on Windows a `setFile`
+ * key and the `fsPath` the provider looks up never matched and every read missed. The visible
+ * symptom was a configuration service that silently saw no settings file at all.
+ *
+ * Normalizing here keeps the tests platform-independent without weakening what they assert.
+ */
+function posixKey(path: string): string {
+	return path.replace(/\\/g, '/');
+}
+
 export class InMemoryFileSystemProvider implements IFileSystemProvider {
 
 	private readonly _entries = new Map<string, IEntry>();
@@ -29,22 +43,24 @@ export class InMemoryFileSystemProvider implements IFileSystemProvider {
 
 	// ---- test helpers
 
-	setFolder(path: string): void {
+	setFolder(rawPath: string): void {
+		const path = posixKey(rawPath);
 		this._ensureParents(path);
 		this._entries.set(path, { type: FileType.Directory, content: '', mtime: ++this._clock });
 	}
 
-	setFile(path: string, content: string): void {
+	setFile(rawPath: string, content: string): void {
+		const path = posixKey(rawPath);
 		this._ensureParents(path);
 		this._entries.set(path, { type: FileType.File, content, mtime: ++this._clock });
 	}
 
-	getFile(path: string): string | undefined {
-		return this._entries.get(path)?.content;
+	getFile(rawPath: string): string | undefined {
+		return this._entries.get(posixKey(rawPath))?.content;
 	}
 
-	has(path: string): boolean {
-		return this._entries.has(path);
+	has(rawPath: string): boolean {
+		return this._entries.has(posixKey(rawPath));
 	}
 
 	paths(): string[] {
@@ -74,17 +90,17 @@ export class InMemoryFileSystemProvider implements IFileSystemProvider {
 	// ---- provider
 
 	async stat(resource: URI): Promise<IFileStat> {
-		const entry = this._entry(resource.fsPath);
-		const name = resource.fsPath.split('/').filter(Boolean).pop() ?? resource.fsPath;
+		const entry = this._entry(posixKey(resource.fsPath));
+		const name = posixKey(resource.fsPath).split('/').filter(Boolean).pop() ?? posixKey(resource.fsPath);
 		return newFileStat(resource, name, entry.type, entry.mtime, entry.content.length);
 	}
 
 	async readdir(resource: URI): Promise<readonly { name: string; type: FileType }[]> {
-		const entry = this._entry(resource.fsPath);
+		const entry = this._entry(posixKey(resource.fsPath));
 		if (!(entry.type & FileType.Directory)) {
 			throw createFileSystemProviderError('not a directory', FileSystemProviderErrorCode.FileNotADirectory);
 		}
-		const prefix = resource.fsPath.endsWith('/') ? resource.fsPath : resource.fsPath + '/';
+		const prefix = posixKey(resource.fsPath).endsWith('/') ? posixKey(resource.fsPath) : posixKey(resource.fsPath) + '/';
 		const children: { name: string; type: FileType }[] = [];
 		for (const [path, candidate] of this._entries) {
 			if (!path.startsWith(prefix)) {
@@ -100,7 +116,7 @@ export class InMemoryFileSystemProvider implements IFileSystemProvider {
 	}
 
 	async readFile(resource: URI): Promise<string> {
-		const entry = this._entry(resource.fsPath);
+		const entry = this._entry(posixKey(resource.fsPath));
 		if (entry.type & FileType.Directory) {
 			throw createFileSystemProviderError('is a directory', FileSystemProviderErrorCode.FileIsADirectory);
 		}
@@ -108,47 +124,47 @@ export class InMemoryFileSystemProvider implements IFileSystemProvider {
 	}
 
 	async writeFile(resource: URI, content: string, options: IFileWriteOptions): Promise<void> {
-		const existing = this._entries.get(resource.fsPath);
+		const existing = this._entries.get(posixKey(resource.fsPath));
 		if (existing && existing.type & FileType.Directory) {
 			throw createFileSystemProviderError('is a directory', FileSystemProviderErrorCode.FileIsADirectory);
 		}
-		if (!existing && options.overwrite === false && this._entries.has(resource.fsPath)) {
+		if (!existing && options.overwrite === false && this._entries.has(posixKey(resource.fsPath))) {
 			throw createFileSystemProviderError('file exists', FileSystemProviderErrorCode.FileExists);
 		}
-		this._ensureParents(resource.fsPath);
-		this._entries.set(resource.fsPath, { type: FileType.File, content, mtime: ++this._clock });
+		this._ensureParents(posixKey(resource.fsPath));
+		this._entries.set(posixKey(resource.fsPath), { type: FileType.File, content, mtime: ++this._clock });
 	}
 
 	async delete(resource: URI, _options: IFileDeleteOptions): Promise<void> {
-		this._entry(resource.fsPath);
-		const prefix = resource.fsPath + '/';
+		this._entry(posixKey(resource.fsPath));
+		const prefix = posixKey(resource.fsPath) + '/';
 		for (const path of [...this._entries.keys()]) {
-			if (path === resource.fsPath || path.startsWith(prefix)) {
+			if (path === posixKey(resource.fsPath) || path.startsWith(prefix)) {
 				this._entries.delete(path);
 			}
 		}
 	}
 
 	async createFolder(resource: URI): Promise<void> {
-		this._ensureParents(resource.fsPath);
-		this._entries.set(resource.fsPath, { type: FileType.Directory, content: '', mtime: ++this._clock });
+		this._ensureParents(posixKey(resource.fsPath));
+		this._entries.set(posixKey(resource.fsPath), { type: FileType.Directory, content: '', mtime: ++this._clock });
 	}
 
 	async rename(from: URI, to: URI, options: { overwrite: boolean }): Promise<void> {
-		const entry = this._entry(from.fsPath);
-		if (!options.overwrite && this._entries.has(to.fsPath)) {
+		const entry = this._entry(posixKey(from.fsPath));
+		if (!options.overwrite && this._entries.has(posixKey(to.fsPath))) {
 			throw createFileSystemProviderError('target exists', FileSystemProviderErrorCode.FileExists);
 		}
-		this._ensureParents(to.fsPath);
-		const prefix = from.fsPath + '/';
-		const moves: [string, IEntry][] = [[to.fsPath, entry]];
+		this._ensureParents(posixKey(to.fsPath));
+		const prefix = posixKey(from.fsPath) + '/';
+		const moves: [string, IEntry][] = [[posixKey(to.fsPath), entry]];
 		for (const [path, candidate] of this._entries) {
 			if (path.startsWith(prefix)) {
-				moves.push([to.fsPath + path.substring(from.fsPath.length), candidate]);
+				moves.push([posixKey(to.fsPath) + path.substring(posixKey(from.fsPath).length), candidate]);
 			}
 		}
 		for (const [path] of moves) {
-			if (path === from.fsPath || path.startsWith(prefix)) {
+			if (path === posixKey(from.fsPath) || path.startsWith(prefix)) {
 				this._entries.delete(path);
 			}
 		}
@@ -158,15 +174,15 @@ export class InMemoryFileSystemProvider implements IFileSystemProvider {
 	}
 
 	async clone(from: URI, to: URI, options: { overwrite: boolean }): Promise<void> {
-		const entry = this._entry(from.fsPath);
+		const entry = this._entry(posixKey(from.fsPath));
 		if (entry.type & FileType.Directory) {
 			throw createFileSystemProviderError('directory copy is not supported', FileSystemProviderErrorCode.Unknown);
 		}
-		if (!options.overwrite && this._entries.has(to.fsPath)) {
+		if (!options.overwrite && this._entries.has(posixKey(to.fsPath))) {
 			throw createFileSystemProviderError('target exists', FileSystemProviderErrorCode.FileExists);
 		}
-		this._ensureParents(to.fsPath);
-		this._entries.set(to.fsPath, { ...entry, mtime: ++this._clock });
+		this._ensureParents(posixKey(to.fsPath));
+		this._entries.set(posixKey(to.fsPath), { ...entry, mtime: ++this._clock });
 	}
 }
 

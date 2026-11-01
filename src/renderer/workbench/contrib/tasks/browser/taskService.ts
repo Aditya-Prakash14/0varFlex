@@ -41,6 +41,9 @@ import type { TerminalService } from '../../terminal/browser/terminalService.js'
 /** the owner the task problems are published under (the real one uses the matcher's owner) */
 export const TASK_MARKER_OWNER = 'task';
 
+/** the most output a task keeps; a watch task would otherwise grow without bound */
+export const MAX_OUTPUT_CHARS = 200_000;
+
 export type TaskRunState = 'idle' | 'running' | 'exited';
 
 export interface ITaskExecution {
@@ -56,6 +59,13 @@ export interface ITaskServiceOptions {
 	readonly logService: ILogService;
 	getWorkspaceFolder(): URI | undefined;
 	getActiveFile(): URI | undefined;
+	/**
+	 * Asked before the first task runs in a folder. Tasks are defined by files INSIDE the folder
+	 * (`.0varflex/tasks.json`, `package.json` scripts), so opening someone else's repository and
+	 * pressing Ctrl+Shift+B would otherwise run their command with no warning. The real VS Code
+	 * added Workspace Trust for exactly this. The answer is remembered per folder by the caller.
+	 */
+	isTrusted(folder: URI): Promise<boolean>;
 }
 
 export class TaskService extends Disposable {
@@ -68,6 +78,8 @@ export class TaskService extends Disposable {
 
 	private _execution: ITaskExecution | undefined;
 	private _output = '';
+	/** a trailing, incomplete escape sequence waiting for the rest of its bytes */
+	private _pendingEscape = '';
 	private _state: TaskRunState = 'idle';
 
 	constructor(private readonly _options: ITaskServiceOptions) {
@@ -156,6 +168,11 @@ export class TaskService extends Disposable {
 		}
 
 		const folder = this._options.getWorkspaceFolder();
+		// the trust gate lives here, not in the commands, so the output pane's Restart button
+		// cannot route around it
+		if (folder && !await this._options.isTrusted(folder)) {
+			return false;
+		}
 		const expanded = expandTask(task, {
 			workspaceFolder: folder?.fsPath,
 			file: this._options.getActiveFile()?.fsPath
@@ -164,6 +181,7 @@ export class TaskService extends Disposable {
 		// a fresh run owns the problem list: stale markers from the previous run must not linger
 		this._options.markers.removeOwner(TASK_MARKER_OWNER);
 		this._output = '';
+		this._pendingEscape = '';
 		this._state = 'running';
 		this._writeHeader(expanded);
 
@@ -218,11 +236,27 @@ export class TaskService extends Disposable {
 	}
 
 	private _appendOutput(data: string): void {
-		this._output += data;
-		this._onDidWriteOutput.fire(data);
+		// Strip once, on arrival, instead of on every repaint: the pane used to re-scan the
+		// whole buffer every 50ms while output streamed.
+		const { text, pending } = stripAnsiStreaming(this._pendingEscape, data);
+		this._pendingEscape = pending;
+		this._output += text;
+		// A watch task runs for hours; without this the service holds every byte it ever printed
+		// and the problem matcher re-scans all of it on each exit.
+		if (this._output.length > MAX_OUTPUT_CHARS) {
+			this._output = this._output.slice(this._output.length - MAX_OUTPUT_CHARS);
+		}
+		this._onDidWriteOutput.fire(text);
 	}
 
 	private _onExit(exitCode: number | undefined): void {
+		// terminate() settles the state itself (a killed pty may never report an exit), so the
+		// real exit event can arrive afterwards for the same process. Without this guard the
+		// exit line is written twice and the problem matcher runs twice, the second pass
+		// republishing markers that were just cleared.
+		if (this._state === 'exited') {
+			return;
+		}
 		if (this._execution) {
 			this._execution.exitCode = exitCode;
 		}
@@ -247,7 +281,7 @@ export class TaskService extends Disposable {
 		}
 
 		const folder = this._options.getWorkspaceFolder();
-		const problems = matchProblems(stripAnsi(this._output), matcher);
+		const problems = matchProblems(this._output, matcher);
 
 		// group by file: changeOne replaces a whole (owner, resource) tuple
 		const byResource = new Map<string, { resource: URI; markers: IMarkerData[] }>();
@@ -282,10 +316,41 @@ export class TaskService extends Disposable {
 }
 
 /**
- * Drop ANSI escape sequences before matching. A pty colours its output, and `\x1b[31m` in front
- * of a path breaks any regex anchored with `^`.
+ * Drop ANSI escape sequences. A pty colours its output, and a greedy `(.*)` in a problem pattern
+ * swallows `\x1b[31m` INTO the captured path, so the matcher would report a problem against a
+ * file that does not exist.
  */
 export function stripAnsi(value: string): string {
 	// eslint-disable-next-line no-control-regex
 	return value.replace(/\x1b\[[0-9;]*[A-Za-z]/g, '').replace(/\x1b\][^\x07\x1b]*(\x07|\x1b\\)/g, '');
+}
+
+/** the longest escape tail we hold back; past this a lone ESC is treated as ordinary data */
+const MAX_PENDING_ESCAPE = 32;
+
+/**
+ * Strip escapes from a STREAM, one chunk at a time.
+ *
+ * A pty can split `\x1b[31m` across two chunks, and stripping each chunk on its own would leave
+ * `[31m` behind as visible garbage. Any trailing, not-yet-terminated escape is held back in
+ * `pending` and prepended to the next chunk. The cap stops a lone ESC in binary output from
+ * stalling the stream forever.
+ */
+export function stripAnsiStreaming(pending: string, chunk: string): { text: string; pending: string } {
+	const combined = pending + chunk;
+	// eslint-disable-next-line no-control-regex
+	const lastEscape = combined.lastIndexOf('\x1b');
+
+	if (lastEscape >= 0) {
+		const tail = combined.slice(lastEscape);
+		// a CSI ends with a letter; an OSC ends with BEL or ST; any other escape is 2 bytes
+		const terminated = /^\x1b\[[0-9;]*[A-Za-z]/.test(tail)
+			|| /^\x1b\][^\x07\x1b]*(\x07|\x1b\\)/.test(tail)
+			|| (!tail.startsWith('\x1b[') && !tail.startsWith('\x1b]') && tail.length >= 2);
+		if (!terminated && tail.length <= MAX_PENDING_ESCAPE) {
+			return { text: stripAnsi(combined.slice(0, lastEscape)), pending: tail };
+		}
+	}
+
+	return { text: stripAnsi(combined), pending: '' };
 }

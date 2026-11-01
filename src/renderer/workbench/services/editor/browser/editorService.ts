@@ -98,7 +98,10 @@ export class EditorService extends Disposable {
 	 * `revertTo` goes through the model, so the widget's readonly gate does not block it.
 	 */
 	async openReadonlyContent(options: { key: string; name: string; content: string }, group?: EditorGroupView): Promise<boolean> {
-		const resource = URI.parse(`${READONLY_CONTENT_SCHEME}:/${options.key}`);
+		// encode the key: it is an identity, not a path, and a raw `?` or `#` in it (legal in a
+		// file name on macOS and Linux) would be parsed as a query or fragment and silently
+		// truncate it, so two different files could share one tab
+		const resource = URI.parse(`${READONLY_CONTENT_SCHEME}:/${encodeURIComponent(options.key)}`);
 		const key = resource.toString();
 
 		let input = this._inputs.get(key);

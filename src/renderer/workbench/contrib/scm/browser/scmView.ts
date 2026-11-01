@@ -16,7 +16,7 @@
 // the 20k a search can produce; upgrade to the search tree's pooling if a repository ever floods.
 
 import { Emitter, Event } from '../../../../../common/base/common/event.js';
-import { Disposable } from '../../../../../common/base/common/lifecycle.js';
+import { Disposable, DisposableStore } from '../../../../../common/base/common/lifecycle.js';
 import type { ICommandService } from '../../../../platform/commands/common/commands.js';
 import { IContextKey, IContextKeyService, RawContextKey } from '../../../../platform/contextkey/common/contextkey.js';
 import { addDisposableListener, append, $ } from '../../../../base/browser/dom.js';
@@ -49,6 +49,13 @@ export class SCMView extends Disposable {
 
 	private readonly _onDidChangeState = this._register(new Emitter<void>());
 	readonly onDidChangeState: Event<void> = this._onDidChangeState.event;
+
+	/**
+	 * Listeners for the rows of the CURRENT render. render() rebuilds the body from scratch, so
+	 * row listeners must die with the rows they were attached to — registering them on the view
+	 * itself kept one per row per repaint for the lifetime of the window.
+	 */
+	private readonly _rowDisposables = this._register(new DisposableStore());
 
 	constructor(container: HTMLElement, private readonly _services: ISCMViewServices) {
 		super();
@@ -102,11 +109,14 @@ export class SCMView extends Disposable {
 	}
 
 	render(): void {
+		this._rowDisposables.clear();
 		const repository = this._services.scmService.activeRepository;
 
 		this._placeholderOwner.placeholder = repository?.inputBoxPlaceholder ?? 'Message (press Ctrl+Enter to commit)';
-		// only overwrite the box when the provider's value genuinely differs, so typing is safe
-		if (repository && this._input.value !== repository.inputBoxValue && document.activeElement !== this._input) {
+		// The service only changes this value when the PROVIDER changed it (the user's own typing
+		// already matches what is in the box), so a plain difference means "adopt it" — including
+		// the clear after a commit, which must land even while the box has focus.
+		if (repository && this._input.value !== repository.inputBoxValue) {
 			this._input.value = repository.inputBoxValue;
 		}
 		this._input.disabled = !repository;
@@ -152,7 +162,7 @@ export class SCMView extends Disposable {
 
 		if (resource.command) {
 			const command = resource.command;
-			this._register(addDisposableListener(row, 'click', () => {
+			this._rowDisposables.add(addDisposableListener(row, 'click', () => {
 				void this._services.commandService.executeCommand(command.id, ...(command.args ?? []));
 			}));
 		} else {

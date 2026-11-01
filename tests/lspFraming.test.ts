@@ -72,5 +72,6 @@ test('a >64KB payload round-trips (the big completion list)', () => {
 
 test('a header without Content-Length throws instead of mis-parsing', () => {
 	const reader = new MessageReader();
-	assert.throws(() => reader.append(Buffer.from('X-Whatever: 1\r\n\r\n{}', 'ascii')), /invalid LSP header/);
+	// the reader is shared by LSP and DAP now, so the message is protocol-neutral
+	assert.throws(() => reader.append(Buffer.from('X-Whatever: 1\r\n\r\n{}', 'ascii')), /invalid message header/);
 });

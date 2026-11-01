@@ -17,7 +17,7 @@ import {
 	sortTasks,
 	taskForGroup
 } from '../src/common/platform/tasks/common/tasks.js';
-import { stripAnsi } from '../src/renderer/workbench/contrib/tasks/browser/taskService.js';
+import { stripAnsi, stripAnsiStreaming } from '../src/renderer/workbench/contrib/tasks/browser/taskService.js';
 
 // ---- variables
 
@@ -232,4 +232,53 @@ test('stripAnsi: colour codes would otherwise be captured INTO the path', () => 
 test('stripAnsi: OSC sequences (window titles) are removed too', () => {
 	assert.equal(stripAnsi('\u001b]0;a title\u0007hello'), 'hello');
 	assert.equal(stripAnsi('plain text'), 'plain text');
+});
+
+// ---- the streaming stripper: a pty can split an escape across two chunks
+
+test('stripAnsiStreaming: a whole escape in one chunk is stripped immediately', () => {
+	const result = stripAnsiStreaming('', '\u001b[31mred\u001b[0m\n');
+	assert.equal(result.text, 'red\n');
+	assert.equal(result.pending, '');
+});
+
+test('stripAnsiStreaming: an escape SPLIT across chunks does not leak garbage', () => {
+	// chunk 1 ends mid-escape; stripping it alone would emit the bare "[31m"
+	const first = stripAnsiStreaming('', 'src/a.ts:1:1: \u001b[31');
+	assert.equal(first.text, 'src/a.ts:1:1: ', 'the partial escape must be held back');
+	assert.equal(first.pending, '\u001b[31');
+
+	const second = stripAnsiStreaming(first.pending, 'm oops\n');
+	assert.equal(second.text, ' oops\n', 'the completed escape is stripped, not printed');
+	assert.equal(second.pending, '');
+
+	assert.equal(first.text + second.text, 'src/a.ts:1:1:  oops\n');
+});
+
+test('stripAnsiStreaming: a split at the ESC byte itself is handled', () => {
+	const first = stripAnsiStreaming('', 'plain\u001b');
+	assert.equal(first.text, 'plain');
+	assert.equal(first.pending, '\u001b');
+	const second = stripAnsiStreaming(first.pending, '[0mmore');
+	assert.equal(second.text, 'more');
+});
+
+test('stripAnsiStreaming: text with no escapes passes straight through', () => {
+	const result = stripAnsiStreaming('', 'just output\n');
+	assert.deepEqual(result, { text: 'just output\n', pending: '' });
+});
+
+test('stripAnsiStreaming: a lone ESC in binary junk does not stall the stream forever', () => {
+	// 33 bytes of tail is past the cap, so it is emitted as data rather than held
+	const junk = '\u001b' + 'x'.repeat(40);
+	const result = stripAnsiStreaming('', junk);
+	assert.equal(result.pending, '', 'the stream must not stall waiting for a terminator');
+	assert.ok(result.text.length > 0);
+});
+
+test('stripAnsiStreaming: an OSC sequence split across chunks is held then stripped', () => {
+	const first = stripAnsiStreaming('', 'a\u001b]0;ti');
+	assert.equal(first.text, 'a');
+	const second = stripAnsiStreaming(first.pending, 'tle\u0007b');
+	assert.equal(second.text, 'b');
 });

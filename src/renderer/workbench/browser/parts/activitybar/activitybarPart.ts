@@ -1,6 +1,7 @@
 // src/renderer/workbench/browser/parts/activitybar/activitybarPart.ts — the icon column.
 // vs/workbench/browser/parts/activitybar/activitybarPart.ts hosts the composite bar; ours has
-// four placeholder icons and one real action (Explorer toggles the sidebar).
+// two placeholder icons and three real actions (Explorer and Search switch the sidebar's
+// composite, the gear opens settings.json).
 
 import { Emitter } from '../../../../../common/base/common/event.js';
 import { addDisposableListener, append, $ } from '../../../../base/browser/dom.js';
@@ -26,7 +27,8 @@ const ICONS: { [id in ActivityBarItem]: string } = {
 
 const ENTRIES: IActivityBarEntry[] = [
 	{ id: 'explorer', title: 'Explorer', icon: ICONS['explorer'], enabled: true },
-	{ id: 'search', title: 'Search (coming later)', icon: ICONS['search'], enabled: false },
+	// A1: the Search composite is real now, so this icon switches the sidebar to it
+	{ id: 'search', title: 'Search', icon: ICONS['search'], enabled: true },
 	{ id: 'source-control', title: 'Source Control (coming later)', icon: ICONS['source-control'], enabled: false },
 	{ id: 'debug', title: 'Run and Debug (coming later)', icon: ICONS['debug'], enabled: false },
 	// the gear sits at the bottom (margin-top: auto) — exercise 06

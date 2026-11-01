@@ -15,6 +15,7 @@ import { IInstallCommandResult, IUpdateStateDto, IVersionInfo, IWindowChannel, I
 import { ExtensionHostLauncher, scanExtensionsMain } from '../../extensionHost.js';
 import type { IUpdateService } from '../../update/updateService.js';
 import { PtyHostStarter } from '../../terminal/ptyHostStarter.js';
+import { RipgrepSearchEngine } from '../../search/ripgrepSearch.js';
 import type { ILogService } from '../../../common/platform/log/common/log.js';
 import type { IExtensionScanResult } from '../../../common/platform/extensions/common/extensionScanner.js';
 import { StorageMainService } from '../../../common/platform/storage/common/storageIpc.js';
@@ -366,10 +367,13 @@ export function registerChannels(window: BrowserWindow, server: ChannelServer<IW
 	server.registerChannel('log', ProxyChannel.fromService<IWindowContext>(new LogChannel(), store));
 	// 10: ONE `file` channel replaces 02's hand-written fileIO channel — the FileService runs in
 	// main (disk provider + watcher) and the renderer gets the proxied wire shape
-	void logService;
 	const fileWire = createFileServiceWire(fileService);
 	store.add(toDisposable(() => fileWire.dispose()));
 	server.registerChannel('file', ProxyChannel.fromService<IWindowContext>(fileWire.service, store));
+	// A1: the search engine is per window and dies with it, so a reload reaps its rg children
+	const searchEngine = new RipgrepSearchEngine(logService);
+	store.add(searchEngine);
+	server.registerChannel('search', ProxyChannel.fromService<IWindowContext>(searchEngine, store));
 	server.registerChannel('window', ProxyChannel.fromService<IWindowContext>(new WindowChannelService(window, store, initialPaths, updateService, logService), store));
 	// storage is app-level (not per window), but it rides the window's channel server
 	server.registerChannel('storage', storage);

@@ -42,6 +42,9 @@ export class Workbench extends Disposable {
 				// 10: the icon focuses the Explorer view (the real behavior); the sidebar toggle
 				// stays available through its own command and the View menu
 				void this._commandService.executeCommand('workbench.view.explorer');
+			} else if (id === 'search') {
+				// A1: the sidebar's second composite
+				void this._commandService.executeCommand('workbench.view.search');
 			} else if (id === 'settings') {
 				void this._commandService.executeCommand(OPEN_SETTINGS_JSON_ID);
 			}

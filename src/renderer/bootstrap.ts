@@ -44,6 +44,11 @@ import { registerConfigurationActions } from './workbench/contrib/configuration/
 import { registerDefaultConfigurations } from './workbench/contrib/configuration/browser/defaultSettings.js';
 import { ExplorerService } from './workbench/contrib/files/browser/explorerService.js';
 import { ExplorerView } from './workbench/contrib/files/browser/explorerView.js';
+// A1: the search stack — the channel-backed service, the composite and its commands
+import type { ISearchChannel } from '../common/platform/search/common/search.js';
+import { SearchService } from './workbench/services/search/browser/searchService.js';
+import { SearchView } from './workbench/contrib/search/browser/searchView.js';
+import { registerSearchActions } from './workbench/contrib/search/browser/searchActions.js';
 import { registerFileCommands, EXPLORER_ID } from './workbench/contrib/files/browser/fileCommands.js';
 import { confirmDialog } from './workbench/browser/parts/editor/dialogs/confirmDialog.js';
 import { WorkspaceContextService, createWorkspaceFolder, workspaceSettingsUri } from '../common/platform/workspace/common/workspace.js';
@@ -378,9 +383,61 @@ async function main(): Promise<void> {
 	explorerView.attach(explorerService);
 	const workspaceContext = new WorkspaceContextService();
 
+	// ---- A1: the Search composite, the sidebar's second tenant
+	const searchService = new SearchService(ProxyChannel.toService<ISearchChannel>(channelClient.getChannel('search')));
+	const searchView = new SearchView(sidebarContainer, {
+		searchService,
+		contextKeyService,
+		logService,
+		getFolder: () => workspaceContext.folder,
+		openMatch: (resource, match, options) => {
+			void editorService.openEditor({
+				resource,
+				options: {
+					// the match's own range, so the editor opens with it selected and centered
+					selection: {
+						lineNumber: match.lineNumber,
+						column: match.startColumn,
+						endLineNumber: match.lineNumber,
+						endColumn: match.endColumn
+					},
+					focus: !options.preserveFocus
+				}
+			});
+		}
+	});
+
+	const showComposite = (id: 'explorer' | 'search'): void => {
+		if (!workbench.layout.sidebar.visible) {
+			workbench.layout.setSidebarVisible(true);
+		}
+		workbench.layout.sidebar.showComposite(id);
+		workbench.layout.activitybar.setActive(id);
+	};
+
+	workbench.layout.sidebar.registerComposite({
+		id: 'explorer',
+		element: explorerView.element,
+		getTitle: () => {
+			const folder = workspaceContext.folder;
+			return folder ? `EXPLORER: ${folder.name.toUpperCase()}` : 'EXPLORER';
+		}
+	});
+	workbench.layout.sidebar.registerComposite({
+		id: 'search',
+		element: searchView.element,
+		getTitle: () => 'SEARCH'
+	});
+	workbench.layout.sidebar.showComposite('explorer');
+
+	registerSearchActions({
+		getView: () => searchView,
+		showSearchView: () => showComposite('search')
+	});
+
 	const updateWorkspaceUi = (): void => {
 		const folder = workspaceContext.folder;
-		workbench.layout.sidebar.setTitle(folder ? `EXPLORER: ${folder.name.toUpperCase()}` : 'EXPLORER');
+		workbench.layout.sidebar.updateTitle();
 		workbench.layout.statusbar.removeEntry('workspace');
 		if (folder) {
 			workbench.layout.statusbar.addEntry('workspace', {
@@ -426,9 +483,8 @@ async function main(): Promise<void> {
 	// the activity bar's Explorer icon: show the sidebar and FOCUS the tree (real behavior —
 	// collapsing lives on the toggle command, 03)
 	CommandsRegistry.registerCommand(EXPLORER_ID, () => {
-		if (!workbench.layout.sidebar.visible) {
-			workbench.layout.setSidebarVisible(true);
-		}
+		// A1: the sidebar has two composites now, so the icon must also swap to this one
+		showComposite('explorer');
 		explorerService.tree.focus();
 	});
 	CommandMetadata.register({ id: EXPLORER_ID, title: 'Show Explorer', category: 'View' });
@@ -439,6 +495,8 @@ async function main(): Promise<void> {
 	fileService.onDidFilesChange(event => {
 		explorerService.handleFileChanges(event);
 		editorService.handleFileChanges(event);
+		// A1: a save re-runs that one file's matches; a delete drops its node
+		searchView.handleFileChanges(event);
 		const folder = workspaceContext.folder;
 		if (folder && event.contains(workspaceSettingsUri(folder))) {
 			void configurationService.reload();

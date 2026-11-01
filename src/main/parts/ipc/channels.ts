@@ -16,6 +16,8 @@ import { ExtensionHostLauncher, scanExtensionsMain } from '../../extensionHost.j
 import type { IUpdateService } from '../../update/updateService.js';
 import { PtyHostStarter } from '../../terminal/ptyHostStarter.js';
 import { RipgrepSearchEngine } from '../../search/ripgrepSearch.js';
+import { AgentService } from '../../agent/agentSession.js';
+import { DEFAULT_MAX_RESULTS } from '../../../common/platform/search/common/search.js';
 import type { ILogService } from '../../../common/platform/log/common/log.js';
 import type { IExtensionScanResult } from '../../../common/platform/extensions/common/extensionScanner.js';
 import { StorageMainService } from '../../../common/platform/storage/common/storageIpc.js';
@@ -374,7 +376,72 @@ export function registerChannels(window: BrowserWindow, server: ChannelServer<IW
 	const searchEngine = new RipgrepSearchEngine(logService);
 	store.add(searchEngine);
 	server.registerChannel('search', ProxyChannel.fromService<IWindowContext>(searchEngine, store));
+
+	// The in-editor coding agent. It lives in main because that is where Node is (file writes,
+	// child processes) and because the API credential must never reach the renderer bundle.
+	const agentService = new AgentService({
+		logService,
+		// the agent's search tool reuses the editor's own engine rather than a second one
+		searchFiles: (root, pattern, isRegExp) => searchOnce(searchEngine, root, pattern, isRegExp)
+	});
+	store.add(agentService);
+	server.registerChannel('agent', ProxyChannel.fromService<IWindowContext>(agentService, store));
 	server.registerChannel('window', ProxyChannel.fromService<IWindowContext>(new WindowChannelService(window, store, initialPaths, updateService, logService), store));
 	// storage is app-level (not per window), but it rides the window's channel server
 	server.registerChannel('storage', storage);
+}
+
+/**
+ * One-shot search for the agent's `search_files` tool: drive the streaming engine and resolve
+ * with everything it found. Capped, because a tool result goes straight into the model's
+ * context window and an unbounded match list would fill it.
+ */
+async function searchOnce(
+	engine: RipgrepSearchEngine,
+	root: string,
+	pattern: string,
+	isRegExp: boolean
+): Promise<readonly { path: string; line: number; text: string }[]> {
+	const MAX_AGENT_MATCHES = 100;
+	const searchId = `agent-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+
+	return new Promise(resolve => {
+		const found: { path: string; line: number; text: string }[] = [];
+
+		const progress = engine.onDidFindMatches(event => {
+			if (event.searchId !== searchId) {
+				return;
+			}
+			for (const file of event.matches) {
+				for (const match of file.matches) {
+					if (found.length < MAX_AGENT_MATCHES) {
+						found.push({ path: file.path, line: match.lineNumber, text: match.previewText.trim() });
+					}
+				}
+			}
+		});
+
+		const complete = engine.onDidCompleteSearch(event => {
+			if (event.searchId !== searchId) {
+				return;
+			}
+			progress.dispose();
+			complete.dispose();
+			resolve(found);
+		});
+
+		void engine.textSearch({
+			searchId,
+			pattern,
+			isRegExp,
+			isCaseSensitive: false,
+			isWordMatch: false,
+			folderPath: root,
+			maxResults: Math.min(MAX_AGENT_MATCHES * 4, DEFAULT_MAX_RESULTS)
+		}).catch(() => {
+			progress.dispose();
+			complete.dispose();
+			resolve(found);
+		});
+	});
 }

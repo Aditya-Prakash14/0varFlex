@@ -9,6 +9,13 @@ const defaultSettings: IConfigurationNode = {
 	id: 'defaultSettings',
 	title: 'Default Settings',
 	properties: {
+		// the agent's command tool is OFF by default: letting a model run programs in your
+		// workspace is a decision the user makes once, knowingly
+		'agent.allowCommands': {
+			type: 'boolean',
+			default: false,
+			description: 'Allow the built-in coding agent to run commands in the workspace folder. Off by default.'
+		},
 		'editor.fontSize': {
 			type: 'number',
 			default: 14,

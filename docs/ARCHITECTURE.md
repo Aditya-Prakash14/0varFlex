@@ -311,3 +311,80 @@ Every git concept, every DAP concept and every npm concept lives in an extension
 `src/renderer/workbench/` names none of them. Delete `extensions/git-lite/`,
 `extensions/toy-debug/` or the tasks contrib and the corresponding feature disappears while the
 workbench still compiles — which was the thing to test.
+
+---
+
+## Measured against VS Code (v1.145, cloned 2026-11-01)
+
+| | VS Code (`src/vs`) | 0varflex (`src` + `extensions`) |
+|---|---|---|
+| TypeScript files | 11,002 | 190 |
+| Lines of code | 3,935,299 | ~33,000 |
+| Feature areas (`workbench/contrib`) | 102 | 11 |
+
+0varflex is roughly **0.8%** of VS Code by volume. "Add every missing feature" is ~3.9M lines
+across 92 feature areas, so the delta is worked through by priority, not by completion. The
+subsystem table at the top of this document is the per-area version of this comparison.
+
+Worth knowing: VS Code already ships the AI scaffolding this project had to build from scratch —
+its contrib list contains `chat`, `inlineChat`, `inlineCompletions`, `mcp`, `agentsVoice`,
+`remoteCodingAgents` and `welcomeAgentSessions`.
+
+## The built-in coding agent
+
+The editor's own agent, not an extension. It is the one feature deliberately **not** pushed out
+to the extension host, for two reasons that both come down to where things are allowed to live:
+
+- **The credential.** The renderer is a browser context and its bundle is shipped. An API key
+  must never be reachable from it. The agent runs in the **main process**, and the production
+  bundle check confirms the SDK does not appear in `renderer.js`.
+- **The tools.** Reading, writing and running things needs Node. Main already owns the
+  `FileService`, the search engine and child processes; the extension-host API has no file-write
+  or terminal surface, so an agent extension could not edit anything without first growing a
+  large new API.
+
+The split: main runs the loop and the tools, the renderer gets a chat composite over the `agent`
+channel — the same shape the `search` channel uses.
+
+### What makes it safe rather than merely working
+
+A tool input is **untrusted model output**. Schema validation proves the shape; it says nothing
+about where a path points. `confinePath` is the gate, and it is the most-tested function in the
+feature:
+
+- absolute paths and `..` traversal are refused;
+- `realpath` runs on the resolved path, so a symlink pointing out of the workspace is refused
+  even though the lexical check passes — this is the case a naive implementation misses;
+- a file that does not exist yet (the agent creating one) canonicalizes the **parent** instead,
+  so creation works without opening the hole back up. A new file under a symlinked-out directory
+  is still refused.
+
+Beyond paths: `run_command` is gated on `agent.allowCommands` (default **false**) and is not even
+advertised to the model when off; it uses `execFile` with an argument array, so there is no shell
+and nothing to inject into. Every tool has a hard output cap, because a tool result goes straight
+into the context window. `edit_file` replaces one **exact unique** string rather than a line
+range — a stale line number silently edits the wrong code, while a missing or ambiguous string
+fails loudly and changes nothing.
+
+### Loop details that are easy to get wrong
+
+Written against the streaming manual loop rather than the SDK's beta tool runner, because the
+loop has to re-publish every event over IPC and gate each tool before it runs. The rules it
+obeys, each of which is a real failure mode:
+
+- all `tool_result` blocks for one assistant turn go back in **one** user message — splitting
+  them teaches the model to stop making parallel calls;
+- `refusal` can cut a tool input off mid-stream, so that turn's tools never run;
+- `max_tokens` on a tool-calling turn means the arguments are truncated but often still parse,
+  so the call is refused rather than run on partial input;
+- `pause_turn` is not an end — the assistant turn is appended and sent back;
+- the whole `content` array is appended, not just the text, so thinking blocks travel back
+  unchanged;
+- tool inputs are re-validated locally, because eager input streaming turns server-side
+  validation off and the tolerant parser can return a silently truncated object.
+
+**Still open:** `run_command` is one setting rather than a per-call approval prompt (the model
+proposes, the user clicks). That is the upgrade for using the agent on code the user does not
+fully trust. There is no inline chat, no slash commands, no @-file references, no markdown
+rendering in the transcript, and no diff preview before an edit lands — the agent writes
+directly and the open editor reloads.

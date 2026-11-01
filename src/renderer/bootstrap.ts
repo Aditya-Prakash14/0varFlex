@@ -62,6 +62,12 @@ import { registerDebugActions } from './workbench/contrib/debug/browser/debugAct
 import { TaskService } from './workbench/contrib/tasks/browser/taskService.js';
 import { TaskPanel } from './workbench/contrib/tasks/browser/taskPanel.js';
 import { registerTaskActions } from './workbench/contrib/tasks/browser/taskActions.js';
+// the built-in coding agent: the agent runs in main, this is its chat surface
+import type { IAgentChannel } from '../common/platform/agent/common/agent.js';
+import { ALLOW_COMMANDS_SETTING } from '../common/platform/agent/common/agent.js';
+import { ChatService } from './workbench/services/chat/browser/chatService.js';
+import { ChatView } from './workbench/contrib/chat/browser/chatView.js';
+import { registerChatActions } from './workbench/contrib/chat/browser/chatActions.js';
 import type { IWireDebugResponse } from '../common/platform/extensions/common/extensionHostProtocol.js';
 import { registerFileCommands, EXPLORER_ID } from './workbench/contrib/files/browser/fileCommands.js';
 import { confirmDialog } from './workbench/browser/parts/editor/dialogs/confirmDialog.js';
@@ -451,7 +457,27 @@ async function main(): Promise<void> {
 		start: () => void startToyDebugSession()
 	});
 
-	const showComposite = (id: 'explorer' | 'search' | 'source-control' | 'debug'): void => {
+	// ---- the built-in coding agent's chat view (the sidebar's fifth composite)
+	const chatService = new ChatService(ProxyChannel.toService<IAgentChannel>(channelClient.getChannel('agent')));
+	const chatView = new ChatView(sidebarContainer, {
+		chatService,
+		contextKeyService,
+		getWorkspaceRoot: () => workspaceContext.folder?.uri,
+		allowCommands: () => configurationService.getValue<boolean>(ALLOW_COMMANDS_SETTING) === true
+	});
+
+	// the agent edited files on disk: reload any editor showing them, the same path an external
+	// change takes (10's watcher does this for human edits)
+	chatService.onDidChangeFiles(paths => {
+		for (const path of paths) {
+			const input = editorService.getInput(path);
+			if (input) {
+				void input.revert();
+			}
+		}
+	});
+
+	const showComposite = (id: 'explorer' | 'search' | 'source-control' | 'debug' | 'chat'): void => {
 		if (!workbench.layout.sidebar.visible) {
 			workbench.layout.setSidebarVisible(true);
 		}
@@ -491,6 +517,11 @@ async function main(): Promise<void> {
 		element: debugView.element,
 		getTitle: () => 'RUN AND DEBUG'
 	});
+	workbench.layout.sidebar.registerComposite({
+		id: 'chat',
+		element: chatView.element,
+		getTitle: () => 'CHAT'
+	});
 	workbench.layout.sidebar.showComposite('explorer');
 
 	registerSearchActions({
@@ -518,6 +549,12 @@ async function main(): Promise<void> {
 			});
 		}
 	};
+
+	registerChatActions({
+		chatService,
+		getView: () => chatView,
+		showChatView: () => showComposite('chat')
+	});
 
 	registerDebugActions({
 		debugService,

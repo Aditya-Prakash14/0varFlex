@@ -16,7 +16,7 @@ import { HoverController } from '../../../../editor/contrib/hover/hoverControlle
 import { MarkerDecorations } from '../../../../editor/contrib/markerDecorations/markerDecorations.js';
 import { SuggestController } from '../../../../editor/contrib/suggest/suggestController.js';
 import { EditorPane, IEditorViewState } from '../../../common/editor/editorPane.js';
-import { EditorInput } from '../../../common/editor/editorInput.js';
+import { EditorInput, EditorInputCapabilities } from '../../../common/editor/editorInput.js';
 import { TextEditorInput } from '../../../common/editor/textEditorInput.js';
 import { CodeEditorService } from '../../../services/editor/browser/codeEditorService.js';
 
@@ -40,6 +40,9 @@ export class TextEditorPane extends EditorPane {
 		this.element = $('.editor-pane');
 		this._widget = this._register(new EditorWidget(this.element, _services));
 		this._widget.setModel(model);
+		// A2-1: honour the Readonly capability — it was declared but nothing enforced it, so a
+		// readonly input was still editable
+		this._widget.setReadonly(input.hasCapability(EditorInputCapabilities.Readonly));
 		// 12: the language contribs, one set per pane (they resolve their resource through the input)
 		this._register(new SuggestController(this._widget, _services, () => input.resource));
 		this._register(new HoverController(this._widget, _services, () => input.resource));

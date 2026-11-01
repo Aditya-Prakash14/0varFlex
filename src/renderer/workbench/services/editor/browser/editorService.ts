@@ -23,6 +23,9 @@ import { EditorPart } from '../../../browser/parts/editor/editorPart.js';
 import { confirmSaveDialog } from '../../../browser/parts/editor/dialogs/confirmDialog.js';
 import { CodeEditorService } from './codeEditorService.js';
 
+/** A2-1: the scheme readonly, provider-supplied tabs live under (never written to disk) */
+export const READONLY_CONTENT_SCHEME = 'readonly-content';
+
 export interface IResourceEditorOpenOptions {
 	readonly input?: EditorInput;
 	readonly resource?: URI;
@@ -84,6 +87,36 @@ export class EditorService extends Disposable {
 			this._inputs.set(key, input);
 		}
 		return input;
+	}
+
+	/**
+	 * A2-1: open provider-supplied text in a readonly tab (a `git diff` dump). The resource uses
+	 * a non-file scheme so nothing can write it back to disk, and the input reports Readonly so
+	 * the widget refuses edits.
+	 *
+	 * Reopening the same key refreshes the existing tab's content rather than stacking tabs —
+	 * `revertTo` goes through the model, so the widget's readonly gate does not block it.
+	 */
+	async openReadonlyContent(options: { key: string; name: string; content: string }, group?: EditorGroupView): Promise<boolean> {
+		const resource = URI.parse(`${READONLY_CONTENT_SCHEME}:/${options.key}`);
+		const key = resource.toString();
+
+		let input = this._inputs.get(key);
+		if (input) {
+			// the tab is already open: replace what it shows
+			input.getModel()?.revertTo(options.content);
+		} else {
+			input = new TextEditorInput(
+				resource,
+				this._fileService,
+				this._codeEditorService,
+				(editorInput, model) => new TextEditorPane(editorInput, this._paneServices, model),
+				{ content: options.content, name: options.name, readonly: true }
+			);
+			this._inputs.set(key, input);
+		}
+
+		return this.openEditor({ input, options: { focus: true } }, group);
 	}
 
 	getInput(resource: URI): TextEditorInput | undefined {

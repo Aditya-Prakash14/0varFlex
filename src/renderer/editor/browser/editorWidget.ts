@@ -94,6 +94,13 @@ export class EditorWidget extends Disposable {
 	private _lastPaintMs = 0;
 	private _renderCount = 0;
 	private _lastRenderedLines = 0;
+	/**
+	 * A2: readonly mode. `EditorInputCapabilities.Readonly` existed but nothing enforced it, so
+	 * a readonly input could still be typed into. Because every mutation funnels through
+	 * `_pushEdit` (07's contract), one guard there plus undo/redo covers typing, paste, Tab and
+	 * composition commits — the payoff of having a single edit path.
+	 */
+	private _readonly = false;
 
 	private readonly _onDidRender = this._register(new Emitter<IRenderInfo>());
 	readonly onDidRender: Event<IRenderInfo> = this._onDidRender.event;
@@ -326,9 +333,17 @@ export class EditorWidget extends Disposable {
 		return model.getValueInRange(this._cursorController.getSelection());
 	}
 
+	setReadonly(readonly: boolean): void {
+		this._readonly = readonly;
+	}
+
+	get isReadonly(): boolean {
+		return this._readonly;
+	}
+
 	undo(): void {
 		const model = this._model;
-		if (!model || !model.canUndo()) {
+		if (!model || this._readonly || !model.canUndo()) {
 			return;
 		}
 		const cursorState = model.undo();
@@ -339,7 +354,7 @@ export class EditorWidget extends Disposable {
 
 	redo(): void {
 		const model = this._model;
-		if (!model || !model.canRedo()) {
+		if (!model || this._readonly || !model.canRedo()) {
 			return;
 		}
 		const cursorState = model.redo();
@@ -355,8 +370,8 @@ export class EditorWidget extends Disposable {
 	 */
 	private _pushEdit(range: Range, text: string): void {
 		const model = this._model;
-		if (!model) {
-			return;
+		if (!model || this._readonly) {
+			return; // A2: the one gate every mutation passes through
 		}
 		const before = this._cursorState();
 		const after = model.pushEditOperations(before, [{ range, text }], (inverseOperations) => {

@@ -13,6 +13,7 @@ import {
 	EXT_HOST_DOCUMENTS,
 	EXT_HOST_LANGUAGE_FEATURES,
 	MAIN_THREAD_LANGUAGE_FEATURES,
+	MAIN_THREAD_SCM,
 	IWireActiveEditor,
 	IWireRange,
 	IWireTextDocument,
@@ -41,6 +42,8 @@ import { createMainThreadLanguageFeatures } from '../../api/common/mainThreadLan
 import type { LanguageFeaturesService } from '../../api/common/mainThreadLanguageFeatures.js';
 import type { MarkerService } from '../markers/browser/markerService.js';
 import { ConfigurationRegistry } from '../../../../common/platform/configuration/common/configurationRegistry.js';
+import type { SCMService } from '../scm/common/scmService.js';
+import type { IWireSourceControl } from '../../../../common/platform/extensions/common/extensionHostProtocol.js';
 
 export interface IMainThreadServices {
 	readonly logService: ILogService;
@@ -54,6 +57,8 @@ export interface IMainThreadServices {
 	readonly editorPart: EditorPart;
 	readonly languageFeatures: LanguageFeaturesService;
 	readonly markers: MarkerService;
+	/** A2-1: the generic SCM model the host registers providers into */
+	readonly scm: SCMService;
 	/** late-bound to break the construction cycle with the extension service */
 	readonly getExtensionService: () => ExtensionService;
 }
@@ -239,6 +244,16 @@ export function registerAllMainThreadServices(server: ChannelServer<string>, ser
 		services.logService
 	);
 	server.registerChannel(MAIN_THREAD_LANGUAGE_FEATURES, ProxyChannel.fromService(languageFeatureHost.service, new DisposableStore()));
+
+	// ---- A2-1: MainThreadSCM. Nothing git-shaped appears here: a provider registers, pushes
+	// state, and the rows carry command ids the provider itself implements.
+	server.registerChannel(MAIN_THREAD_SCM, ProxyChannel.fromService({
+		$registerSourceControl: async (handle: number, id: string, label: string, rootPath?: string) =>
+			services.scm.registerSourceControl(handle, id, label, rootPath),
+		$unregisterSourceControl: async (handle: number) => services.scm.unregisterSourceControl(handle),
+		$updateSourceControl: async (handle: number, state: IWireSourceControl) =>
+			services.scm.updateSourceControl(handle, state)
+	}, new DisposableStore()));
 
 	server.registerChannel(MAIN_THREAD_LOG, ProxyChannel.fromService({
 		$log: async (level: 'trace' | 'info' | 'warn' | 'error', message: string, extensionId?: string) => {

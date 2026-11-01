@@ -9,6 +9,12 @@ import type { IExtHostConfiguration, IExtHostDocuments, IMainThreadConfiguration
 import type { IWireActiveEditor, IWireTextDocument } from '../common/platform/extensions/common/extensionHostProtocol.js';
 import { Disposable, EventEmitter, Position, Range, Selection, Uri } from './extHostTypes.js';
 
+export interface IExtHostWorkspaceFolder {
+	readonly uri: Uri;
+	readonly name: string;
+	readonly index: number;
+}
+
 // ---- documents
 
 export class ExtHostDocumentData {
@@ -80,9 +86,13 @@ export class ExtHostWorkspace {
 	readonly onDidCloseTextDocument = this._onDidCloseTextDocument.event;
 	private readonly _onDidChangeActiveTextEditor = new EventEmitter<IExtHostTextEditor | undefined>();
 	readonly onDidChangeActiveTextEditor = this._onDidChangeActiveTextEditor.event;
+	/** A2: folder changes, so an extension can re-target when the workspace is swapped */
+	private readonly _onDidChangeWorkspaceFolders = new EventEmitter<void>();
+	readonly onDidChangeWorkspaceFolders = this._onDidChangeWorkspaceFolders.event;
 
 	private readonly _documents = new Map<string, ExtHostDocumentData>();
 	private _activeEditor: IExtHostTextEditor | undefined;
+	private _workspaceFolders: readonly IExtHostWorkspaceFolder[] = [];
 
 	/** configuration mirror + its per-section change events */
 	private _configuration: { [key: string]: unknown } = {};
@@ -101,6 +111,23 @@ export class ExtHostWorkspace {
 
 	get activeTextEditor(): IExtHostTextEditor | undefined {
 		return this._activeEditor;
+	}
+
+	/**
+	 * A2: the real `workspace.workspaceFolders` — undefined when no folder is open, which is the
+	 * API's contract (an empty array would mean "an empty workspace", a different state).
+	 */
+	get workspaceFolders(): readonly IExtHostWorkspaceFolder[] | undefined {
+		return this._workspaceFolders.length > 0 ? this._workspaceFolders : undefined;
+	}
+
+	$acceptWorkspaceFoldersChange(folders: readonly { path: string; name: string; index: number }[]): void {
+		this._workspaceFolders = folders.map(folder => ({
+			uri: Uri.file(folder.path),
+			name: folder.name,
+			index: folder.index
+		}));
+		this._onDidChangeWorkspaceFolders.fire();
 	}
 
 	/** the provider calls resolve the wire uri to the mirrored document */

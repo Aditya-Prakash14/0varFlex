@@ -10,7 +10,7 @@ import { URI } from '../../../../common/base/common/uri.js';
 import type { IFileService } from '../../../../common/platform/files/common/files.js';
 import { TextModel } from '../../../../common/editor/common/model/textModel.js';
 import { CodeEditorService } from '../../services/editor/browser/codeEditorService.js';
-import { EditorInput } from './editorInput.js';
+import { EditorInput, EditorInputCapabilities } from './editorInput.js';
 import type { EditorPane } from './editorPane.js';
 
 export const TEXT_EDITOR_TYPE_ID = 'workbench.editors.textEditorInput';
@@ -44,11 +44,26 @@ export class TextEditorInput extends EditorInput {
 		resource: URI,
 		private readonly _fileService: IFileService,
 		private readonly _codeEditorService: CodeEditorService,
-		private readonly _paneFactory: TextEditorPaneFactory
+		private readonly _paneFactory: TextEditorPaneFactory,
+		/**
+		 * A2-1: in-memory, readonly inputs. Given `content`, the input never touches the file
+		 * service — it is the backing for provider-supplied text (a `git diff` dump) shown in a
+		 * tab that cannot be edited or saved. `EditorInputCapabilities.Readonly` existed but
+		 * nothing honoured it; the pane now feeds it to the widget.
+		 */
+		private readonly _options?: { readonly content?: string; readonly name?: string; readonly readonly?: boolean }
 	) {
 		super();
 		this.resource = resource;
 		this._register({ dispose: () => this._modelListener?.dispose() });
+	}
+
+	get isReadonlyInput(): boolean {
+		return !!this._options?.readonly;
+	}
+
+	override get capabilities(): EditorInputCapabilities {
+		return this._options?.readonly ? EditorInputCapabilities.Readonly : EditorInputCapabilities.None;
 	}
 
 	/** 10: renames re-point the input at the new resource (the model object is kept) */
@@ -61,7 +76,7 @@ export class TextEditorInput extends EditorInput {
 	}
 
 	getName(): string {
-		return basename(this.resource.fsPath);
+		return this._options?.name ?? basename(this.resource.fsPath);
 	}
 
 	getResource(): URI {
@@ -74,6 +89,9 @@ export class TextEditorInput extends EditorInput {
 	}
 
 	override isDirty(): boolean {
+		if (this._options?.readonly) {
+			return false; // a readonly input can never be dirty, so it never prompts on close
+		}
 		return this._model?.isModified() ?? false;
 	}
 
@@ -91,6 +109,10 @@ export class TextEditorInput extends EditorInput {
 		const existing = this._codeEditorService.findModel(this.resource);
 		if (existing) {
 			this._model = existing;
+		} else if (this._options?.content !== undefined) {
+			// provider-supplied text: no disk read, and the resource is a non-file scheme so a
+			// stray write could not land on a real path even if save were reachable
+			this._model = this._codeEditorService.createModel(this.resource, this._options.content);
 		} else {
 			let text: string;
 			try {
@@ -115,6 +137,9 @@ export class TextEditorInput extends EditorInput {
 	}
 
 	override async save(): Promise<boolean> {
+		if (this._options?.readonly) {
+			return false; // nothing to persist, and the resource is not a real path
+		}
 		const model = await this._ensureModel();
 		// the current typing run must become closable BEFORE the save anchors it, or undoing one
 		// keystroke after save would leave the model dirty (07's edit stack contract)
@@ -133,6 +158,9 @@ export class TextEditorInput extends EditorInput {
 	 * course's accepted delta).
 	 */
 	override async revert(): Promise<void> {
+		if (this._options?.readonly) {
+			return;
+		}
 		let text: string;
 		try {
 			text = await this._fileService.readFile(this.resource);

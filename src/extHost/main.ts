@@ -29,7 +29,10 @@ import {
 	MAIN_THREAD_COMMANDS,
 	MAIN_THREAD_CONFIGURATION,
 	MAIN_THREAD_DOCUMENTS,
+	EXT_HOST_SCM,
+	EXT_HOST_WORKSPACE,
 	MAIN_THREAD_LANGUAGE_FEATURES,
+	MAIN_THREAD_SCM,
 	MAIN_THREAD_LOG,
 	MAIN_THREAD_MESSAGE,
 	MAIN_THREAD_STATUS_BAR
@@ -42,6 +45,7 @@ import { createApiFactory, ICreateApiFactory } from './extHostApi.js';
 import { ExtHostExtensionService } from './extHostExtensionService.js';
 import { ExtHostWindow } from './extHostWindow.js';
 import { ExtHostWorkspace } from './extHostWorkspace.js';
+import { ExtHostSCM } from './extHostSCM.js';
 import type {
 	IExtHostConfiguration,
 	IExtHostDocuments,
@@ -49,6 +53,7 @@ import type {
 	IMainThreadConfiguration,
 	IMainThreadDocuments,
 	IMainThreadLanguageFeatures,
+	IMainThreadSCM,
 	IMainThreadLog,
 	IMainThreadMessage,
 	IMainThreadStatusBar
@@ -111,6 +116,9 @@ function runHost(port: Electron.MessagePortMain): void {
 		message => void logProxy.$log('warn', message).catch(() => { /* renderer gone */ }),
 		{ getDocument: uri => extHostWorkspace.getDocument(uri) }
 	);
+	// A2-1: the SCM actor — registrations and state updates travel to MainThreadSCM
+	const scmProxy = ProxyChannel.toService<IMainThreadSCM>(client.getChannel(MAIN_THREAD_SCM));
+	const extHostSCM = new ExtHostSCM(scmProxy, message => void logProxy.$log('warn', message).catch(() => { /* renderer gone */ }));
 	let apiFactory: ICreateApiFactory | undefined;
 	const extensionsById = new Map<string, IExtensionDescription>();
 	const extensionService = new ExtHostExtensionService(logProxy, (extension) => apiFactory ? apiFactory(extension) : Object.freeze({}));
@@ -133,9 +141,13 @@ function runHost(port: Electron.MessagePortMain): void {
 				window: extHostWindow,
 				workspace: extHostWorkspace,
 				languages: extHostLanguageFeatures,
+				scm: extHostSCM,
 				commandsProxy,
 				env: initData.env
 			});
+			// A2: seed the folder mirror BEFORE any extension activates, so an extension's
+			// activate() can read workspace.workspaceFolders straight away
+			extHostWorkspace.$acceptWorkspaceFoldersChange(initData.workspaceFolders ?? []);
 			// register each extension's api under its folder BEFORE any require() can see it
 			for (const description of initData.extensions) {
 				apiByExtensionLocation.set(description.extensionLocation, apiFactory(description));
@@ -146,6 +158,7 @@ function runHost(port: Electron.MessagePortMain): void {
 		$activateExtension: (identifier: string, reason: string) => extensionService.$activateExtension(identifier, reason),
 		terminate: async (): Promise<void> => {
 			extHostLanguageFeatures.disposeAll();
+			extHostSCM.disposeAll();
 			await extensionService.deactivateAll();
 			setTimeout(() => process.exit(0), 0);
 		}
@@ -168,6 +181,15 @@ function runHost(port: Electron.MessagePortMain): void {
 		$provideHover: (handle: number, requestId: number, uri: { scheme: string; path: string }, position: { line: number; character: number }) =>
 			extHostLanguageFeatures.$provideHover(handle, requestId, uri, position),
 		$cancelProviderRequest: (handle: number, requestId: number) => extHostLanguageFeatures.$cancelProviderRequest(handle, requestId)
+	}, new DisposableStore()));
+
+	server.registerChannel(EXT_HOST_SCM, ProxyChannel.fromService({
+		$acceptInputBoxValue: async (handle: number, value: string) => extHostSCM.$acceptInputBoxValue(handle, value)
+	}, new DisposableStore()));
+
+	server.registerChannel(EXT_HOST_WORKSPACE, ProxyChannel.fromService({
+		$acceptWorkspaceFoldersChange: async (folders: readonly { path: string; name: string; index: number }[]) =>
+			extHostWorkspace.$acceptWorkspaceFoldersChange(folders)
 	}, new DisposableStore()));
 
 	server.registerChannel(EXT_HOST_CONFIGURATION, ProxyChannel.fromService({

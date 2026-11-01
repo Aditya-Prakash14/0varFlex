@@ -42,6 +42,8 @@ const bundles = [
 	// 11: the sample extensions (the reference builds these with gulpfile.extensions.ts; 1% scale)
 	{ in: 'extensions/hello/src/extension.ts', out: '../extensions/hello/out/extension.js', platform: 'node', format: 'cjs' },
 	{ in: 'extensions/wordcount/src/extension.ts', out: '../extensions/wordcount/out/extension.js', platform: 'node', format: 'cjs' },
+	// A2-1: source control as an extension (the workbench has no git code)
+	{ in: 'extensions/git-lite/src/extension.ts', out: '../extensions/git-lite/out/extension.js', platform: 'node', format: 'cjs' },
 	// 12: the toy language — an extension with a client AND a separate server process
 	{ in: 'extensions/toy-lang/client/src/extension.ts', out: '../extensions/toy-lang/out/extension.js', platform: 'node', format: 'cjs' },
 	{ in: 'extensions/toy-lang/server/src/server.ts', out: '../extensions/toy-lang/out/server.js', platform: 'node', format: 'cjs' },

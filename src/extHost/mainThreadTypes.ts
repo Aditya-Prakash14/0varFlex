@@ -74,3 +74,23 @@ export interface IExtHostExtensionService {
 export interface IExtHostCommandsProxy {
 	$executeContributedCommand(id: string, args: unknown[]): Promise<unknown>;
 }
+
+import type { IWireSourceControl, IWireWorkspaceFolder } from '../common/platform/extensions/common/extensionHostProtocol.js';
+
+/** A2-1: the SCM surface the workbench serves (the host calls these) */
+export interface IMainThreadSCM {
+	$registerSourceControl(handle: number, id: string, label: string, rootPath?: string): Promise<void>;
+	$unregisterSourceControl(handle: number): Promise<void>;
+	$updateSourceControl(handle: number, state: IWireSourceControl): Promise<void>;
+}
+
+/** A2-1: the host-served SCM channel (the renderer calls these) */
+export interface IExtHostSCM {
+	/** the user typed in the commit box */
+	$acceptInputBoxValue(handle: number, value: string): Promise<void>;
+}
+
+/** A2: folder changes reach the host so `workspace.workspaceFolders` stays true */
+export interface IExtHostWorkspaceFolders {
+	$acceptWorkspaceFoldersChange(folders: readonly IWireWorkspaceFolder[]): Promise<void>;
+}

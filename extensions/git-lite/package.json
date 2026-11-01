@@ -1,0 +1,31 @@
+{
+	"name": "git-lite",
+	"publisher": "0varflex",
+	"version": "1.0.0",
+	"engines": {
+		"0varflex": "^1.0.0"
+	},
+	"main": "./out/extension.js",
+	"activationEvents": [
+		"onStartupFinished"
+	],
+	"contributes": {
+		"commands": [
+			{
+				"command": "git-lite.commit",
+				"title": "Commit",
+				"category": "Git Lite"
+			},
+			{
+				"command": "git-lite.refresh",
+				"title": "Refresh Status",
+				"category": "Git Lite"
+			},
+			{
+				"command": "git-lite.openDiff",
+				"title": "Open Changes",
+				"category": "Git Lite"
+			}
+		]
+	}
+}

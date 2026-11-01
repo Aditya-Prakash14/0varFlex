@@ -29,7 +29,8 @@ const ENTRIES: IActivityBarEntry[] = [
 	{ id: 'explorer', title: 'Explorer', icon: ICONS['explorer'], enabled: true },
 	// A1: the Search composite is real now, so this icon switches the sidebar to it
 	{ id: 'search', title: 'Search', icon: ICONS['search'], enabled: true },
-	{ id: 'source-control', title: 'Source Control (coming later)', icon: ICONS['source-control'], enabled: false },
+	// A2-1: a real composite now — whatever provider registers renders in it
+	{ id: 'source-control', title: 'Source Control', icon: ICONS['source-control'], enabled: true },
 	{ id: 'debug', title: 'Run and Debug (coming later)', icon: ICONS['debug'], enabled: false },
 	// the gear sits at the bottom (margin-top: auto) — exercise 06
 	{ id: 'settings', title: 'Manage', icon: ICONS['settings'], enabled: true }

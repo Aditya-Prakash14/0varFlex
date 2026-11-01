@@ -191,3 +191,42 @@ find is the shortcut that most visibly limits the editor for a user, and it forc
 would all reuse later. Word wrap (candidate 3) is the more instructive port but it touches every
 coordinate in 08 and would be a rewrite, not a continuation; preview tabs and the settings UI are
 polish on subsystems that already work.
+
+---
+
+## A2 — what needed new *kernel* code (the appendix's own test)
+
+The appendix claims most of "VS Code" is a contribution on top of the kernel, and says that if a
+part needs new kernel code, that is a design bug worth writing down. Here is the honest tally.
+
+### A2-1 (source control) — three kernel gaps, all small, all real
+
+1. **`EditorInputCapabilities.Readonly` was declared but never enforced.** Nothing read it, so a
+   "readonly" tab was fully editable. Fixed in two places: `EditorWidget.setReadonly()` gates the
+   single edit funnel (`_pushEdit`) plus undo/redo, and `TextEditorPane` feeds the input's
+   capability to the widget. This was *cheap only because of 07's contract* — all ten mutation
+   sites go through `_pushEdit`, so one branch covers typing, paste, Tab, delete and composition
+   commits. A design win, not a bug.
+
+2. **`workspace.workspaceFolders` returned `undefined`** — the host had no folder mirror, so an
+   extension could not learn which directory it operates on. git-lite cannot find a repository
+   without it. Added to `IExtensionHostInitData` plus an `$acceptWorkspaceFoldersChange` push so a
+   folder swap re-targets the host. **This one is a genuine design bug**: an extension host that
+   cannot name its workspace is not a workspace extension host.
+
+3. **No way for an extension to put text on screen.** There is no `openTextDocument`/
+   `showTextDocument` and no `TextDocumentContentProvider`. Rather than add either, the diff rides
+   the *existing* commands RPC: the workbench owns a generic
+   `workbench.action.openReadonlyContent` ({key, name, content}) command, and `TextEditorInput`
+   gained an optional in-memory content source. No new protocol surface was needed — and the
+   command is deliberately not git-shaped, so the claim holds.
+
+What did **not** need kernel code, and is the evidence for the appendix's claim: the entire SCM
+model, the composite, the status letters and every git concept. `src/renderer/workbench/` contains
+no `git` string; the provider registers resources that carry a **command id it owns**, and the view
+executes whatever it was handed. Deleting `extensions/git-lite/` removes source control and leaves
+the workbench compiling.
+
+The one shortcut worth flagging: git-lite polls (5s + document-change events) because **the host
+has no file-watcher API** (`createFileSystemWatcher` does not exist). The real extension watches
+`.git/` and the worktree. That is a fourth gap, left open rather than papered over.

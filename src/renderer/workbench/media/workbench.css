@@ -1598,3 +1598,133 @@ body {
 	color: #ffffff;
 	border-radius: 2px;
 }
+
+/* ---- A2-1: the Source Control composite ---- */
+
+.scm-view {
+	position: absolute;
+	inset: 0;
+	display: flex;
+	flex-direction: column;
+	overflow: hidden;
+}
+
+.scm-input {
+	margin: 8px;
+	min-height: 48px;
+	padding: 4px 6px;
+	resize: vertical;
+	background: #3c3c3c;
+	color: var(--mini-foreground);
+	border: 1px solid #3c3c3c;
+	border-radius: 2px;
+	outline: none;
+	font-family: inherit;
+	font-size: 12px;
+}
+
+.scm-input:focus {
+	border-color: var(--mini-accent);
+}
+
+.scm-input:disabled {
+	opacity: 0.5;
+}
+
+.scm-body {
+	flex: 1;
+	overflow-y: auto;
+	overflow-x: hidden;
+	scrollbar-width: none;
+}
+
+.scm-body::-webkit-scrollbar {
+	display: none;
+}
+
+.scm-empty {
+	padding: 4px 12px;
+	font-size: 11px;
+	color: var(--mini-watermark-dim);
+}
+
+.scm-group-header {
+	display: flex;
+	align-items: center;
+	height: 22px;
+	padding: 0 12px;
+	font-size: 11px;
+	font-weight: 700;
+	text-transform: uppercase;
+	color: var(--mini-foreground);
+}
+
+.scm-group-count {
+	margin-left: 6px;
+	min-width: 16px;
+	height: 16px;
+	padding: 0 4px;
+	border-radius: 8px;
+	background: #4d4d4d;
+	color: #ffffff;
+	font-size: 10px;
+	line-height: 16px;
+	text-align: center;
+	font-weight: 400;
+}
+
+.scm-row {
+	display: flex;
+	align-items: center;
+	height: 22px;
+	padding: 0 12px 0 20px;
+	font-size: 12px;
+	cursor: pointer;
+	white-space: nowrap;
+}
+
+.scm-row.no-command {
+	cursor: default;
+}
+
+.scm-row:hover {
+	background: rgba(255, 255, 255, 0.04);
+}
+
+.scm-row-name {
+	flex: 0 0 auto;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	max-width: 55%;
+}
+
+.scm-row-dir {
+	flex: 1 1 auto;
+	min-width: 0;
+	margin-left: 6px;
+	font-size: 11px;
+	color: var(--mini-watermark-dim);
+	overflow: hidden;
+	text-overflow: ellipsis;
+	direction: rtl;
+	text-align: left;
+}
+
+/* the status letter palette, ported from the real contrib/scm decorations */
+.scm-row-letter {
+	flex: 0 0 auto;
+	margin-left: 6px;
+	width: 12px;
+	text-align: center;
+	font-size: 11px;
+	font-weight: 700;
+}
+
+.scm-row-letter.letter-m { color: #e2c08d; }  /* modified */
+.scm-row-letter.letter-a { color: #81b88b; }  /* added */
+.scm-row-letter.letter-d { color: #c74e39; }  /* deleted */
+.scm-row-letter.letter-r { color: #73c991; }  /* renamed */
+.scm-row-letter.letter-u { color: #73c991; }  /* untracked */
+.scm-row-letter.letter-c { color: #e4676b; }  /* conflict */
+.scm-row-letter.letter-i { color: #8c8c8c; }  /* ignored */
+.scm-row-letter.letter-t { color: #e2c08d; }  /* type changed */

@@ -49,6 +49,11 @@ import type { ISearchChannel } from '../common/platform/search/common/search.js'
 import { SearchService } from './workbench/services/search/browser/searchService.js';
 import { SearchView } from './workbench/contrib/search/browser/searchView.js';
 import { registerSearchActions } from './workbench/contrib/search/browser/searchActions.js';
+// A2-1: source control — the generic model, the composite and its commands (no git here)
+import { SCMService } from './workbench/services/scm/common/scmService.js';
+import { SCMView } from './workbench/contrib/scm/browser/scmView.js';
+import { registerSCMActions } from './workbench/contrib/scm/browser/scmActions.js';
+import { EXT_HOST_SCM, EXT_HOST_WORKSPACE } from '../common/platform/extensions/common/extensionHostProtocol.js';
 import { registerFileCommands, EXPLORER_ID } from './workbench/contrib/files/browser/fileCommands.js';
 import { confirmDialog } from './workbench/browser/parts/editor/dialogs/confirmDialog.js';
 import { WorkspaceContextService, createWorkspaceFolder, workspaceSettingsUri } from '../common/platform/workspace/common/workspace.js';
@@ -407,7 +412,11 @@ async function main(): Promise<void> {
 		}
 	});
 
-	const showComposite = (id: 'explorer' | 'search'): void => {
+	// ---- A2-1: the Source Control composite, the sidebar's third tenant
+	const scmService = new SCMService();
+	const scmView = new SCMView(sidebarContainer, { scmService, commandService, contextKeyService });
+
+	const showComposite = (id: 'explorer' | 'search' | 'source-control'): void => {
 		if (!workbench.layout.sidebar.visible) {
 			workbench.layout.setSidebarVisible(true);
 		}
@@ -428,11 +437,30 @@ async function main(): Promise<void> {
 		element: searchView.element,
 		getTitle: () => 'SEARCH'
 	});
+	workbench.layout.sidebar.registerComposite({
+		id: 'source-control',
+		element: scmView.element,
+		getTitle: () => {
+			const count = scmView.count;
+			return count > 0 ? `SOURCE CONTROL (${count})` : 'SOURCE CONTROL';
+		}
+	});
+	// keep the header count live as the provider pushes state
+	scmView.onDidChangeState(() => {
+		if (workbench.layout.sidebar.activeCompositeId === 'source-control') {
+			workbench.layout.sidebar.updateTitle();
+		}
+	});
 	workbench.layout.sidebar.showComposite('explorer');
 
 	registerSearchActions({
 		getView: () => searchView,
 		showSearchView: () => showComposite('search')
+	});
+	registerSCMActions({
+		getView: () => scmView,
+		showScmView: () => showComposite('source-control'),
+		editorService
 	});
 
 	const updateWorkspaceUi = (): void => {
@@ -603,6 +631,7 @@ async function main(): Promise<void> {
 		editorPart: workbench.layout.editor,
 		languageFeatures,
 		markers: markerService,
+		scm: scmService,
 		getExtensionService: () => extensionService
 	};
 	const documentMirror = new WorkbenchDocuments(mainThreadServiceHost);
@@ -630,10 +659,27 @@ async function main(): Promise<void> {
 		registerContributions: scanned => registerExtensionContributions(scanned, { extensionService, languageService, logService }),
 		initData: {
 			extensions: scanResult.extensions.map(entry => entry.description),
+			// A2: the host needs the root to find the repository git-lite operates on
+			workspaceFolders: workspaceContext.folder
+				? [{ path: workspaceContext.folder.uri.fsPath, name: workspaceContext.folder.name, index: 0 }]
+				: [],
 			userDataPath,
 			logLevel: 'info',
 			env: { appName: '0varflex', appVersion: windowInfo.appVersion }
 		}
+	});
+
+	// A2-1: the commit box mirrors back to whichever provider owns the repository
+	scmService.setInputSink((handle, value) => {
+		void hostManager.callHostService(EXT_HOST_SCM, '$acceptInputBoxValue', [handle, value]);
+	});
+
+	// A2: a folder swap re-targets the host's workspace mirror (git-lite re-reads its root)
+	workspaceContext.onDidChangeWorkspaceFolders(() => {
+		const folder = workspaceContext.folder;
+		void hostManager.callHostService(EXT_HOST_WORKSPACE, '$acceptWorkspaceFoldersChange', [
+			folder ? [{ path: folder.uri.fsPath, name: folder.name, index: 0 }] : []
+		]);
 	});
 
 	// 04's CommandService gets the activation seam (the TODO in its source is gone)

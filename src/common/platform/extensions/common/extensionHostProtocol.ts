@@ -10,8 +10,20 @@ import type { IExtensionDescription } from './extensions.js';
 
 // ---- handshake
 
+export interface IWireWorkspaceFolder {
+	readonly path: string;
+	readonly name: string;
+	readonly index: number;
+}
+
 export interface IExtensionHostInitData {
 	readonly extensions: readonly IExtensionDescription[];
+	/**
+	 * A2: the host needs the workspace root — `workspace.workspaceFolders` used to return
+	 * undefined, so an extension could not find the folder it operates on (git-lite needs the
+	 * repository root). Pushed again on change via $acceptWorkspaceFoldersChange.
+	 */
+	readonly workspaceFolders: readonly IWireWorkspaceFolder[];
 	readonly userDataPath: string;
 	readonly logLevel: string;
 	readonly env: {
@@ -45,8 +57,14 @@ export const EXT_HOST_COMMANDS = 'ExtHostCommands';
 export const EXT_HOST_DOCUMENTS = 'ExtHostDocuments';
 export const EXT_HOST_CONFIGURATION = 'ExtHostConfiguration';
 export const EXT_HOST_LANGUAGE_FEATURES = 'ExtHostLanguageFeatures';
+/** A2-1: the host-served SCM channel (input box echoes) */
+export const EXT_HOST_SCM = 'ExtHostSCM';
+/** A2: folder changes pushed to the host */
+export const EXT_HOST_WORKSPACE = 'ExtHostWorkspace';
 
 export const MAIN_THREAD_LANGUAGE_FEATURES = 'MainThreadLanguageFeatures';
+/** A2-1: the source control API surface the workbench serves */
+export const MAIN_THREAD_SCM = 'MainThreadSCM';
 
 // ---- wire DTOs
 
@@ -188,4 +206,38 @@ export function uriToWire(uri: { scheme: string; path: string }): IWireUri {
 
 export function wireToUri(wire: IWireUri): { scheme: string; path: string } {
 	return { scheme: wire.scheme, path: wire.path };
+}
+
+// ---- A2-1: source control (SCM) wire shapes
+//
+// Ported in subset from vs/workbench/api/common/extHost.protocol.ts's MainThreadSCMShape. The
+// workbench has NO git code: it renders whatever a provider registers, and a click runs a
+// COMMAND the extension owns — which is why no git concept appears on this wire.
+
+/** one changed file. `letter` is the status badge (M/A/D/R/U/?) the view renders and colors. */
+export interface IWireScmResource {
+	readonly path: string;
+	readonly letter: string;
+	readonly tooltip?: string;
+	/** run when the row is clicked — the extension's own command (e.g. open the diff) */
+	readonly command?: { readonly id: string; readonly args?: readonly unknown[] };
+}
+
+export interface IWireScmResourceGroup {
+	readonly id: string;
+	readonly label: string;
+	readonly resources: readonly IWireScmResource[];
+}
+
+export interface IWireSourceControl {
+	readonly id: string;
+	readonly label: string;
+	readonly rootPath?: string;
+	readonly groups: readonly IWireScmResourceGroup[];
+	readonly inputBoxPlaceholder: string;
+	readonly inputBoxValue: string;
+	/** the command the commit button / ctrl+enter runs */
+	readonly acceptCommand?: { readonly id: string; readonly args?: readonly unknown[] };
+	/** badge count for the activity bar / view header */
+	readonly count: number;
 }

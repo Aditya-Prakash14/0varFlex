@@ -8,6 +8,7 @@ import type { ExtHostCommands } from './extHostCommands.js';
 import type { ExtHostLanguageFeatures } from './extHostLanguageFeatures.js';
 import type { ExtHostWindow } from './extHostWindow.js';
 import type { ExtHostWorkspace } from './extHostWorkspace.js';
+import type { ExtHostSCM } from './extHostSCM.js';
 import type { IMainThreadCommands } from './mainThreadTypes.js';
 import {
 	ConfigurationTarget,
@@ -25,6 +26,7 @@ import {
 
 export interface IExtHostApiServices {
 	readonly commands: ExtHostCommands;
+	readonly scm: ExtHostSCM;
 	readonly languages: ExtHostLanguageFeatures;
 	readonly window: ExtHostWindow;
 	readonly workspace: ExtHostWorkspace;
@@ -100,9 +102,11 @@ export function createApiFactory(services: IExtHostApiServices): ICreateApiFacto
 				onDidChangeTextDocument: services.workspace.onDidChangeTextDocument,
 				onDidCloseTextDocument: services.workspace.onDidCloseTextDocument,
 				onDidChangeConfiguration: (callback: (event: { affectsConfiguration(section: string): boolean }) => void) => services.workspace.onDidChangeConfiguration(callback),
-				get workspaceFolders(): undefined {
-					return undefined; // delta: no folder mirror in the host (the samples don't need it)
-				}
+				// A2: a real folder mirror now (git-lite needs the repository root)
+				get workspaceFolders() {
+					return services.workspace.workspaceFolders;
+				},
+				onDidChangeWorkspaceFolders: services.workspace.onDidChangeWorkspaceFolders
 			},
 
 			languages: {
@@ -116,6 +120,14 @@ export function createApiFactory(services: IExtHostApiServices): ICreateApiFacto
 				},
 				createDiagnosticCollection(name?: string): unknown {
 					return services.languages.createDiagnosticCollection(extension, name ?? extension.name);
+				}
+			},
+
+			// A2-1: source control. The workbench renders whatever registers here and runs the
+			// commands the resources carry — it has no git concept of its own.
+			scm: {
+				createSourceControl(id: string, label: string, rootUri?: Uri) {
+					return services.scm.createSourceControl(id, label, rootUri);
 				}
 			},
 

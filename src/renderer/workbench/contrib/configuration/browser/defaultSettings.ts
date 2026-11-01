@@ -16,6 +16,13 @@ const defaultSettings: IConfigurationNode = {
 			default: false,
 			description: 'Allow the built-in coding agent to run commands in the workspace folder. Off by default.'
 		},
+		// the real key, with the subset of values this build implements
+		'workbench.startupEditor': {
+			type: 'string',
+			default: 'welcomePageInEmptyWorkbench',
+			enum: ['none', 'welcomePage', 'welcomePageInEmptyWorkbench'],
+			description: 'Controls which editor is shown at startup, if none are restored from the previous session.'
+		},
 		'editor.fontSize': {
 			type: 'number',
 			default: 14,

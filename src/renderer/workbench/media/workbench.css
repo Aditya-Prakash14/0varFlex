@@ -2357,3 +2357,288 @@ body {
 	background: rgba(234, 92, 0, 0.6);
 	outline: 1px solid #f38518;
 }
+
+/* ---- the Welcome page (the workbench's first non-text editor) ---- */
+
+.welcome-page {
+	position: absolute;
+	inset: 0;
+	overflow-y: auto;
+	outline: none;
+	scrollbar-width: none;
+}
+
+.welcome-page::-webkit-scrollbar {
+	display: none;
+}
+
+.welcome-body {
+	max-width: 960px;
+	margin: 0 auto;
+	padding: 36px 32px 48px;
+}
+
+.welcome-header {
+	margin-bottom: 28px;
+}
+
+.welcome-title {
+	margin: 0;
+	font-size: 28px;
+	font-weight: 300;
+	letter-spacing: -0.01em;
+	color: var(--mini-foreground);
+}
+
+.welcome-subtitle {
+	margin-top: 4px;
+	font-size: 12px;
+	color: var(--mini-watermark-dim);
+}
+
+.welcome-columns {
+	display: flex;
+	gap: 48px;
+	align-items: flex-start;
+}
+
+.welcome-column {
+	flex: 0 0 240px;
+	min-width: 0;
+}
+
+.welcome-column.wide {
+	flex: 1 1 auto;
+}
+
+.welcome-section-title {
+	margin: 0 0 8px;
+	font-size: 13px;
+	font-weight: 600;
+	color: var(--mini-foreground);
+}
+
+.welcome-column .welcome-section-title:not(:first-child) {
+	margin-top: 24px;
+}
+
+.welcome-links {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+}
+
+.welcome-link {
+	font-size: 12px;
+	color: var(--mini-accent);
+	cursor: pointer;
+	user-select: none;
+	outline: none;
+	width: fit-content;
+}
+
+.welcome-link:hover {
+	text-decoration: underline;
+}
+
+.welcome-link:focus-visible {
+	outline: 1px solid var(--mini-accent);
+}
+
+.welcome-empty {
+	font-size: 12px;
+	color: var(--mini-watermark-dim);
+}
+
+.welcome-recent {
+	display: flex;
+	flex-direction: column;
+}
+
+.welcome-recent-row {
+	display: flex;
+	align-items: baseline;
+	gap: 6px;
+	padding: 2px 0;
+}
+
+.welcome-recent-open {
+	display: flex;
+	align-items: baseline;
+	gap: 6px;
+	min-width: 0;
+	cursor: pointer;
+	outline: none;
+}
+
+.welcome-recent-name {
+	font-size: 12px;
+	color: var(--mini-accent);
+	white-space: nowrap;
+}
+
+.welcome-recent-open:hover .welcome-recent-name {
+	text-decoration: underline;
+}
+
+.welcome-recent-dir {
+	font-size: 11px;
+	color: var(--mini-watermark-dim);
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	direction: rtl;
+	text-align: left;
+}
+
+.welcome-recent-remove {
+	margin-left: auto;
+	flex: 0 0 auto;
+	font-size: 10px;
+	color: transparent;
+	cursor: pointer;
+	outline: none;
+}
+
+.welcome-recent-row:hover .welcome-recent-remove {
+	color: var(--mini-watermark-dim);
+}
+
+.welcome-recent-remove:hover {
+	color: var(--mini-foreground);
+}
+
+/* the walkthrough checklist */
+
+.welcome-walkthrough-header {
+	display: flex;
+	align-items: baseline;
+	gap: 10px;
+}
+
+.welcome-progress {
+	font-size: 11px;
+	color: var(--mini-watermark-dim);
+}
+
+.welcome-progress-bar {
+	height: 3px;
+	margin: 2px 0 16px;
+	border-radius: 2px;
+	background: rgba(255, 255, 255, 0.08);
+	overflow: hidden;
+}
+
+.welcome-progress-fill {
+	height: 100%;
+	background: var(--mini-accent);
+	transition: width 160ms ease-out;
+}
+
+.welcome-steps {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+}
+
+.welcome-step {
+	display: flex;
+	gap: 10px;
+	padding: 10px 12px;
+	border-radius: 4px;
+	border: 1px solid transparent;
+}
+
+.welcome-step:hover {
+	background: rgba(255, 255, 255, 0.03);
+	border-color: var(--mini-border);
+}
+
+.welcome-step-tick {
+	flex: 0 0 16px;
+	width: 16px;
+	height: 16px;
+	margin-top: 1px;
+	border: 1px solid #5a5a5a;
+	border-radius: 50%;
+	font-size: 10px;
+	line-height: 14px;
+	text-align: center;
+	color: transparent;
+}
+
+.welcome-step.done .welcome-step-tick {
+	border-color: #81b88b;
+	background: #81b88b;
+	color: #1e1e1e;
+}
+
+.welcome-step.done .welcome-step-title {
+	color: var(--mini-watermark-dim);
+	text-decoration: line-through;
+}
+
+.welcome-step-text {
+	min-width: 0;
+}
+
+.welcome-step-title {
+	display: flex;
+	align-items: baseline;
+	gap: 8px;
+	font-size: 13px;
+	font-weight: 600;
+	color: var(--mini-foreground);
+}
+
+.welcome-step-key {
+	padding: 1px 5px;
+	border: 1px solid var(--mini-border);
+	border-radius: 3px;
+	background: rgba(255, 255, 255, 0.06);
+	font-family: var(--mini-editor-font-family, Menlo, Consolas, monospace);
+	font-size: 10px;
+	font-weight: 400;
+	color: var(--mini-watermark-dim);
+}
+
+.welcome-step-description {
+	margin-top: 2px;
+	font-size: 12px;
+	line-height: 1.5;
+	color: var(--mini-watermark-dim);
+}
+
+.welcome-step-action {
+	display: inline-block;
+	margin-top: 6px;
+	font-size: 12px;
+	color: var(--mini-accent);
+	cursor: pointer;
+	user-select: none;
+	outline: none;
+}
+
+.welcome-step-action:hover {
+	text-decoration: underline;
+}
+
+.welcome-step-action:focus-visible {
+	outline: 1px solid var(--mini-accent);
+}
+
+.welcome-footer {
+	margin-top: 32px;
+	padding-top: 16px;
+	border-top: 1px solid var(--mini-border);
+}
+
+.welcome-startup {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	font-size: 12px;
+	color: var(--mini-watermark-dim);
+	cursor: pointer;
+	user-select: none;
+}

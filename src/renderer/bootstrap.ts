@@ -69,6 +69,10 @@ import { ALLOW_COMMANDS_SETTING } from '../common/platform/agent/common/agent.js
 import { ChatService } from './workbench/services/chat/browser/chatService.js';
 import { ChatView } from './workbench/contrib/chat/browser/chatView.js';
 import { registerChatActions } from './workbench/contrib/chat/browser/chatActions.js';
+// the Welcome page: the workbench's first non-text editor
+import { WelcomeEditorInput } from './workbench/contrib/welcome/browser/welcomeEditor.js';
+import type { IWelcomeServices } from './workbench/contrib/welcome/browser/welcomeEditor.js';
+import { registerWelcomeActions, STARTUP_EDITOR_SETTING, WelcomeStateService } from './workbench/contrib/welcome/browser/welcomeActions.js';
 import type { IWireDebugResponse } from '../common/platform/extensions/common/extensionHostProtocol.js';
 import { registerFileCommands, EXPLORER_ID } from './workbench/contrib/files/browser/fileCommands.js';
 import { confirmDialog } from './workbench/browser/parts/editor/dialogs/confirmDialog.js';
@@ -565,6 +569,41 @@ async function main(): Promise<void> {
 		showChatView: () => showComposite('chat')
 	});
 
+	// ---- the Welcome page. One input instance, so opening it twice reveals the same tab.
+	// setFolder is declared below this point, so the Recent list's click handler reaches it
+	// through a reference assigned once it exists
+	let setFolderRef: ((uri: URI | undefined) => Promise<void>) | undefined;
+	const welcomeState = new WelcomeStateService(storage, commandService);
+	const welcomeServices: IWelcomeServices = {
+		productName: '0varflex',
+		version: '1.0.2',
+		runCommand: commandId => void commandService.executeCommand(commandId),
+		openFolderAt: path => void setFolderRef?.(URI.file(path)),
+		removeRecentFolder: path => welcomeState.forgetFolder(path),
+		getRecentFolders: () => welcomeState.recentFolders,
+		getCompletedSteps: () => welcomeState.completedSteps,
+		isShowOnStartup: () => configurationService.getValue<string>(STARTUP_EDITOR_SETTING) !== 'none',
+		setShowOnStartup: show => {
+			// unchecking means "never"; checking restores the useful default rather than
+			// always showing it even with a folder open
+			void configurationService.updateValue(STARTUP_EDITOR_SETTING, show ? 'welcomePageInEmptyWorkbench' : 'none');
+		},
+		onDidChangeState: welcomeState.onDidChangeState
+	};
+
+	// One Welcome tab, enforced here because the group keys tabs by instance. Closing the tab
+	// leaves the input disposed (the editor service drops an unused resource-less input), so a
+	// later Welcome must build a fresh one rather than resurrect a dead object.
+	let welcomeInput: WelcomeEditorInput | undefined;
+	const showWelcome = (): void => {
+		if (!welcomeInput || !workbench.layout.editor.findGroup(welcomeInput)) {
+			welcomeInput = new WelcomeEditorInput(welcomeServices);
+		}
+		void editorService.openEditor({ input: welcomeInput, options: { focus: true } });
+	};
+	registerWelcomeActions({ showWelcome });
+	keybindingService.rebuild();
+
 	registerDebugActions({
 		debugService,
 		getView: () => debugView,
@@ -600,8 +639,14 @@ async function main(): Promise<void> {
 		configurationService.setWorkspaceSettingsPath(uri ? workspaceSettingsUri(createWorkspaceFolder(uri)).fsPath : null);
 		await configurationService.load();
 		storage.store('workbench.workspace.folder', uri?.fsPath ?? null, StorageScope.APPLICATION);
+		if (uri) {
+			// the Welcome page's Recent list reflects real use
+			welcomeState.noteFolderOpened(uri.fsPath);
+		}
 		updateWorkspaceUi();
 	};
+
+	setFolderRef = setFolder;
 
 	const openFolder = async (): Promise<void> => {
 		const picked = await windowChannel.showOpenFolderDialog({ title: 'Open Folder' });
@@ -712,6 +757,16 @@ async function main(): Promise<void> {
 		logService.info('no path on argv — the editor part starts with its watermark');
 	}
 	windowChannel.onDidOpenPaths(paths => void openCliPaths(paths, 'second instance'));
+
+	// ---- the startup editor. `workbench.startupEditor` decides, and anything already open
+	// (a file from argv) wins — the real setting reads "if none are restored".
+	const openStartupEditor = (): void => {
+		const hasRestoredEditors = editorService.activeInput !== null;
+		const setting = configurationService.getValue<string>(STARTUP_EDITOR_SETTING);
+		if (welcomeState.shouldShowOnStartup(setting, !!workspaceContext.folder, hasRestoredEditors)) {
+			showWelcome();
+		}
+	};
 
 	// ---- the terminal (exercise 13): service + panel UI + actions. Nothing spawns until the
 	// panel first becomes visible (the ports open lazily on the first createProcess).
@@ -860,6 +915,9 @@ async function main(): Promise<void> {
 	});
 	CommandMetadata.register({ id: 'workbench.action.reloadWindow', title: 'Developer: Reload Window', category: 'Developer' });
 	keybindingService.rebuild();
+
+	// the Welcome page opens once the layout is up, so it does not race the first paint
+	openStartupEditor();
 
 	// `onStartupFinished`: after the first render pass, like the reference's startup event.
 	// rAF NEVER fires in an occluded window (13's reload lesson): race it against a timer.

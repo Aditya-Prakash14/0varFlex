@@ -19,6 +19,8 @@ import type { URI } from '../../../../../common/base/common/uri.js';
 import type { KeybindingService } from '../../../../platform/keybinding/browser/keybindingService.js';
 import {
 	ICreateProcessResult,
+	IProcessExitEvent,
+	IPtyHostProcessDataEvent,
 	IPtyHostService,
 	PTY_HOST_CHANNEL
 } from '../../../../../common/platform/terminal/common/terminal.js';
@@ -86,6 +88,12 @@ export class TerminalService extends Disposable {
 	private readonly _onDidChangeInstanceTitle = this._register(new Emitter<TerminalInstance>());
 	readonly onDidChangeInstanceTitle: Event<TerminalInstance> = this._onDidChangeInstanceTitle.event;
 
+	/** A2-3: raw pty streams, for consumers without a terminal UI (the task system) */
+	private readonly _onProcessData = this._register(new Emitter<IPtyHostProcessDataEvent>());
+	readonly onProcessData: Event<IPtyHostProcessDataEvent> = this._onProcessData.event;
+	private readonly _onProcessExit = this._register(new Emitter<IProcessExitEvent>());
+	readonly onProcessExit: Event<IProcessExitEvent> = this._onProcessExit.event;
+
 	constructor(private readonly _options: ITerminalServiceOptions) {
 		super();
 		// the exit event tells the renderer all terminals died (the port itself is dead then)
@@ -126,9 +134,18 @@ export class TerminalService extends Disposable {
 				const client = new ChannelClient(new PtyHostProtocol());
 				const host = ProxyChannel.toService<IPtyHostService>(client.getChannel(PTY_HOST_CHANNEL));
 				// data routing happens through the collected events (the ported channel shape)
-				host.onProcessData(event => this.getInstance(event.id)?.acceptData(event.data, this));
+				host.onProcessData(event => {
+					this.getInstance(event.id)?.acceptData(event.data, this);
+					// A2-3: processes without a UI instance (tasks) listen here. The routing above
+					// assumed every process had a terminal attached; a task's output would
+					// otherwise be dropped on the floor.
+					this._onProcessData.fire(event);
+				});
 				host.onProcessReady(id => this.getInstance(id)?.acceptReady());
-				host.onProcessExit(event => this.getInstance(event.id)?.acceptExit(event.exitCode, this));
+				host.onProcessExit(event => {
+					this.getInstance(event.id)?.acceptExit(event.exitCode, this);
+					this._onProcessExit.fire(event);
+				});
 				this._host = host;
 				this._hostDead = false;
 			})().catch(error => {
@@ -142,10 +159,19 @@ export class TerminalService extends Disposable {
 
 	/** the renderer has NOT fitted the terminal yet: the caller passes the fitted size (the
 	 * ported order that keeps zsh from swallowing its first prompt) */
-	async createProcess(cols: number, rows: number): Promise<ICreateProcessResult> {
+	async createProcess(cols: number, rows: number, overrides?: { shell?: string; shellArgs?: readonly string[]; cwd?: string }): Promise<ICreateProcessResult> {
 		const host = await this.ensureHost();
-		const cwd = this._options.getCwd()?.fsPath;
-		return host.$createProcess({ cols, rows, cwd });
+		// A2-3: a task spawns its command DIRECTLY instead of a shell, so its exit code is the
+		// task's exit code rather than the shell's. ICreateProcessOptions already carried
+		// shell/shellArgs/cwd, so the pty host needed no change at all.
+		const cwd = overrides?.cwd ?? this._options.getCwd()?.fsPath;
+		return host.$createProcess({
+			cols,
+			rows,
+			cwd,
+			shell: overrides?.shell,
+			shellArgs: overrides?.shellArgs
+		});
 	}
 
 	async start(id: number): Promise<void> {

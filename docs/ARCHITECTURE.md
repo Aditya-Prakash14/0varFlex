@@ -266,3 +266,48 @@ the full handshake (initialize → setBreakpoints → configurationDone → laun
 checks the process actually **exits on disconnect** — the "adapter reaped" acceptance item, as a
 test rather than a claim. It found a real bug: `setBreakpoints` arrives before `launch`, so
 verification had to read the source named in the request instead of the not-yet-loaded program.
+
+### A2-3 (tasks) — two kernel seams, both one-liners in disguise
+
+1. **The terminal service assumed every process had a UI.** Pty data was routed as
+   `getInstance(event.id)?.acceptData(...)`, so a process with no `TerminalInstance` had its
+   output silently dropped. Tasks need a hidden process whose bytes go to a text pane, so the
+   service now also re-fires `onProcessData`/`onProcessExit` for any listener. Small, but a real
+   assumption worth naming: "a process" and "a terminal" were the same thing.
+
+2. **The panel could only host one kind of pane.** `PanelPart` had a tab strip the terminal
+   contrib filled directly, so a second tenant would have fought it for visibility. Added
+   `registerTabGroup`/`activateTabGroup`: each contrib supplies a `setVisible` callback and the
+   *part* arbitrates, so the terminal and task panes never reference each other. This is the same
+   shape the sidebar got in A1 and what the reference's `paneCompositePart` does properly.
+
+What did **not** need changing, and is the headline: `ICreateProcessOptions` already carried
+`shell`/`shellArgs`/`cwd`, so a task spawns its command **directly** — with no pty-host change at
+all, and the exit code belongs to the task rather than to a wrapping shell. Problems go through
+12's marker service under the owner `task`, which means they appear in the Problems view *and* as
+squiggles with no new rendering code. The picker reuses 04's quick input and its `fuzzyScore`.
+
+One non-obvious bug the tests caught: a pty colours its output, and a greedy `(.*)` in a problem
+pattern **swallows the ANSI escape into the captured path**, so the matcher reports a problem
+against a file that does not exist. Failing to match would have been obvious; matching with a
+poisoned path is not. `stripAnsi` runs before matching, and the test asserts that exact failure
+mode rather than just the happy path.
+
+### A2 verdict on the appendix's claim
+
+The claim holds, with four honest exceptions — all of them *missing generic seams*, never missing
+feature code:
+
+| Gap | Kind | Severity |
+|---|---|---|
+| `workspace.workspaceFolders` returned `undefined` | missing API | **real bug** — a workspace extension host that cannot name its workspace |
+| `EditorInputCapabilities.Readonly` not enforced | declared, unimplemented | real, cheap to fix (one gate, thanks to 07) |
+| No editor-contribution registry | missing registry | real; the second gutter contribution will force it |
+| No file-watcher API for extensions | missing API | real; git-lite polls instead (left open) |
+| Panel/sidebar multi-tenancy | missing registry | expected — 03 deferred it explicitly |
+| Terminal data routing assumed a UI | wrong assumption | minor |
+
+Every git concept, every DAP concept and every npm concept lives in an extension or a contrib.
+`src/renderer/workbench/` names none of them. Delete `extensions/git-lite/`,
+`extensions/toy-debug/` or the tasks contrib and the corresponding feature disappears while the
+workbench still compiles — which was the thing to test.

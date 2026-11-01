@@ -27,6 +27,7 @@ interface ITabEntry {
 export class TerminalPanel extends Disposable {
 
 	private readonly _tabs = new Map<TerminalInstance, ITabEntry>();
+	private _groupVisible = true;
 	private readonly _content: HTMLElement;
 	private readonly _sizeObserver: ElementSizeObserver;
 	private _ensurePromise: Promise<void> | undefined;
@@ -212,6 +213,7 @@ export class TerminalPanel extends Disposable {
 			if (event.target === close) {
 				return;
 			}
+			this._panel.activateTabGroup('terminal');
 			this._service.setActive(instance);
 			instance.focus();
 		});
@@ -246,16 +248,27 @@ export class TerminalPanel extends Disposable {
 		}
 	}
 
+	/** A2-3: the panel hosts more than terminals now; the part tells us when we are the ones shown */
+	setGroupVisible(visible: boolean): void {
+		this._groupVisible = visible;
+		for (const [, entry] of this._tabs) {
+			entry.tab.style.display = visible ? '' : 'none';
+		}
+		this._updateActive(this._service.activeInstance);
+	}
+
 	private _updateActive(instance: TerminalInstance | null): void {
 		for (const [candidate, entry] of this._tabs) {
-			const active = candidate === instance;
+			const active = this._groupVisible && candidate === instance;
 			entry.tab.classList.toggle('active', active);
 			entry.container.style.display = active ? '' : 'none';
 			if (active) {
 				candidate.setVisible(true);
 			}
 		}
-		this.fitAll();
+		if (this._groupVisible) {
+			this.fitAll();
+		}
 	}
 
 	private _updateTitle(instance: TerminalInstance): void {

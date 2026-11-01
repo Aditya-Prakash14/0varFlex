@@ -58,6 +58,10 @@ import { EXT_HOST_DEBUG, EXT_HOST_SCM, EXT_HOST_WORKSPACE } from '../common/plat
 import { DebugService } from './workbench/services/debug/browser/debugService.js';
 import { DebugView } from './workbench/contrib/debug/browser/debugView.js';
 import { registerDebugActions } from './workbench/contrib/debug/browser/debugActions.js';
+// A2-3: tasks — discovery, pty execution, the output pane and the problem matcher
+import { TaskService } from './workbench/contrib/tasks/browser/taskService.js';
+import { TaskPanel } from './workbench/contrib/tasks/browser/taskPanel.js';
+import { registerTaskActions } from './workbench/contrib/tasks/browser/taskActions.js';
 import type { IWireDebugResponse } from '../common/platform/extensions/common/extensionHostProtocol.js';
 import { registerFileCommands, EXPLORER_ID } from './workbench/contrib/files/browser/fileCommands.js';
 import { confirmDialog } from './workbench/browser/parts/editor/dialogs/confirmDialog.js';
@@ -674,7 +678,27 @@ async function main(): Promise<void> {
 		getCwd: () => workspaceContext.folder?.uri
 	});
 	const terminalPanel = new TerminalPanel(workbench.layout.panel, terminalService, configurationService, visible => workbench.layout.setPanelVisible(visible));
+	// A2-3: the terminal becomes one tab GROUP among several in the panel
+	workbench.layout.panel.registerTabGroup('terminal', { setVisible: visible => terminalPanel.setGroupVisible(visible) });
 	registerTerminalActions(terminalPanel, contextKeyService);
+
+	// A2-3: the task system. It reuses 13's pty (spawning the command directly), 12's markers
+	// for problems and 04's quick pick for selection — no new subsystem.
+	const taskService = new TaskService({
+		terminalService,
+		fileService,
+		markers: markerService,
+		logService,
+		getWorkspaceFolder: () => workspaceContext.folder?.uri,
+		getActiveFile: () => editorService.activeInput?.getResource()
+	});
+	const taskPanel = new TaskPanel(workbench.layout.panel, taskService, visible => workbench.layout.setPanelVisible(visible));
+	registerTaskActions({
+		taskService,
+		quickInput,
+		getPanel: () => taskPanel,
+		notify: (message, severity = 'info') => void notifications.show({ severity, message })
+	});
 	keybindingService.rebuild();
 
 	// ---- the extension system (exercise 11): scan → contributions → the host process

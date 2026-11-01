@@ -1,0 +1,26 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "echo the workspace folder",
+			"command": "node",
+			"args": ["-e", "console.log(process.argv[1])", "${workspaceFolder}"]
+		},
+		{
+			"label": "fake compiler errors",
+			"command": "node",
+			"args": [
+				"-e",
+				"console.log('src/renderer/bootstrap.ts:12:5: something is wrong'); console.log('src/main/main.ts:3:1: and here too'); process.exit(1)"
+			],
+			"problemMatcher": {
+				"pattern": "^(.*):(\d+):(\d+): (.*)$",
+				"file": 1,
+				"line": 2,
+				"column": 3,
+				"message": 4,
+				"severity": "error"
+			}
+		}
+	]
+}

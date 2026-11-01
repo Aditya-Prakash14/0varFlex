@@ -63,4 +63,37 @@ export class PanelPart extends Part {
 	getContentContainer(): HTMLElement | undefined {
 		return this._contentContainer;
 	}
+
+	// ---- A2-3: tab GROUPS, so the panel can host more than one kind of pane.
+	//
+	// The terminal contrib owns N tabs (one per instance); the task contrib owns one. Rather
+	// than have them coordinate with each other, each registers a `setVisible` callback and the
+	// part arbitrates: activating a group hides every other group. The reference's
+	// paneCompositePart does the same job with a composite registry.
+
+	private readonly _tabGroups = new Map<string, { setVisible(visible: boolean): void }>();
+	private _activeTabGroup: string | undefined;
+
+	registerTabGroup(id: string, group: { setVisible(visible: boolean): void }): void {
+		this._tabGroups.set(id, group);
+		// the first group registered becomes the active one
+		if (this._activeTabGroup === undefined) {
+			this._activeTabGroup = id;
+		}
+		group.setVisible(this._activeTabGroup === id);
+	}
+
+	activateTabGroup(id: string): void {
+		if (!this._tabGroups.has(id)) {
+			return;
+		}
+		this._activeTabGroup = id;
+		for (const [groupId, group] of this._tabGroups) {
+			group.setVisible(groupId === id);
+		}
+	}
+
+	get activeTabGroup(): string | undefined {
+		return this._activeTabGroup;
+	}
 }

@@ -1941,3 +1941,94 @@ body {
 .editor-margin {
 	cursor: pointer;
 }
+
+/* ---- A2-3: the Task output pane (the panel's second tab kind) ---- */
+
+.panel-tab.task-tab {
+	display: flex;
+	align-items: center;
+	height: 100%;
+	padding: 0 10px;
+	font-size: 11px;
+	cursor: pointer;
+	color: var(--mini-activitybar-foreground);
+	border-bottom: 1px solid transparent;
+	white-space: nowrap;
+}
+
+.panel-tab.task-tab:hover {
+	color: var(--mini-foreground);
+}
+
+.panel-tab.task-tab.active {
+	color: var(--mini-foreground);
+	border-bottom-color: var(--mini-accent);
+}
+
+.task-pane {
+	position: absolute;
+	inset: 0;
+	display: flex;
+	flex-direction: column;
+	overflow: hidden;
+}
+
+.task-pane-header {
+	display: flex;
+	align-items: center;
+	flex: 0 0 auto;
+	padding: 4px 10px;
+	border-bottom: 1px solid var(--mini-border);
+}
+
+.task-pane-actions {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	width: 100%;
+}
+
+.task-status {
+	flex: 1 1 auto;
+	min-width: 0;
+	font-size: 11px;
+	color: var(--mini-watermark-dim);
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.task-status.failed {
+	color: #f48771;
+}
+
+.task-action {
+	flex: 0 0 auto;
+	font-size: 11px;
+	color: var(--mini-activitybar-foreground);
+	cursor: pointer;
+	user-select: none;
+	outline: none;
+}
+
+.task-action:hover {
+	color: var(--mini-foreground);
+	text-decoration: underline;
+}
+
+.task-action:focus-visible {
+	outline: 1px solid var(--mini-accent);
+}
+
+.task-output {
+	flex: 1 1 auto;
+	margin: 0;
+	padding: 6px 10px;
+	overflow: auto;
+	font-family: var(--mini-editor-font-family, Menlo, Consolas, monospace);
+	font-size: 12px;
+	line-height: 1.4;
+	color: var(--mini-foreground);
+	white-space: pre-wrap;
+	word-break: break-word;
+}

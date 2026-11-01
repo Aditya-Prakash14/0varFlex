@@ -9,6 +9,7 @@ import type { ExtHostLanguageFeatures } from './extHostLanguageFeatures.js';
 import type { ExtHostWindow } from './extHostWindow.js';
 import type { ExtHostWorkspace } from './extHostWorkspace.js';
 import type { ExtHostSCM } from './extHostSCM.js';
+import type { ExtHostDebug, IDebugAdapterDescriptorFactory } from './extHostDebug.js';
 import type { IMainThreadCommands } from './mainThreadTypes.js';
 import {
 	ConfigurationTarget,
@@ -27,6 +28,7 @@ import {
 export interface IExtHostApiServices {
 	readonly commands: ExtHostCommands;
 	readonly scm: ExtHostSCM;
+	readonly debug: ExtHostDebug;
 	readonly languages: ExtHostLanguageFeatures;
 	readonly window: ExtHostWindow;
 	readonly workspace: ExtHostWorkspace;
@@ -129,6 +131,22 @@ export function createApiFactory(services: IExtHostApiServices): ICreateApiFacto
 				createSourceControl(id: string, label: string, rootUri?: Uri) {
 					return services.scm.createSourceControl(id, label, rootUri);
 				}
+			},
+
+			// A2-2: debug. The only way an adapter enters the system is a descriptor factory —
+			// the workbench ships a DAP client and no debugger.
+			debug: {
+				registerDebugAdapterDescriptorFactory(type: string, factory: IDebugAdapterDescriptorFactory): Disposable {
+					return services.debug.registerDebugAdapterDescriptorFactory(type, factory);
+				},
+				startDebugging(_folder: unknown, configuration: { type: string; name: string; request?: string; [key: string]: unknown }): Promise<boolean> {
+					return services.debug.$startDebugging({
+						request: 'launch',
+						...configuration
+					}).then(sessionId => sessionId !== null);
+				},
+				onDidStartDebugSession: services.debug.onDidStartDebugSession,
+				onDidTerminateDebugSession: services.debug.onDidTerminateDebugSession
 			},
 
 			env: {

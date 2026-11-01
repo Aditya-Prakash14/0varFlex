@@ -6,7 +6,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import { encodeMessage, MessageReader } from '../extensions/toy-lang/client/src/lsp-framing.js';
+import { encodeMessage, MessageReader } from '../src/common/base/parts/protocol/common/messageFraming.js';
 
 function messageOf(chunk: Buffer): unknown {
 	const messages = new MessageReader().append(chunk);

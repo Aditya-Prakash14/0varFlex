@@ -29,9 +29,11 @@ import {
 	MAIN_THREAD_COMMANDS,
 	MAIN_THREAD_CONFIGURATION,
 	MAIN_THREAD_DOCUMENTS,
+	EXT_HOST_DEBUG,
 	EXT_HOST_SCM,
 	EXT_HOST_WORKSPACE,
 	MAIN_THREAD_LANGUAGE_FEATURES,
+	MAIN_THREAD_DEBUG,
 	MAIN_THREAD_SCM,
 	MAIN_THREAD_LOG,
 	MAIN_THREAD_MESSAGE,
@@ -46,6 +48,7 @@ import { ExtHostExtensionService } from './extHostExtensionService.js';
 import { ExtHostWindow } from './extHostWindow.js';
 import { ExtHostWorkspace } from './extHostWorkspace.js';
 import { ExtHostSCM } from './extHostSCM.js';
+import { ExtHostDebug } from './extHostDebug.js';
 import type {
 	IExtHostConfiguration,
 	IExtHostDocuments,
@@ -53,6 +56,7 @@ import type {
 	IMainThreadConfiguration,
 	IMainThreadDocuments,
 	IMainThreadLanguageFeatures,
+	IMainThreadDebug,
 	IMainThreadSCM,
 	IMainThreadLog,
 	IMainThreadMessage,
@@ -119,6 +123,9 @@ function runHost(port: Electron.MessagePortMain): void {
 	// A2-1: the SCM actor — registrations and state updates travel to MainThreadSCM
 	const scmProxy = ProxyChannel.toService<IMainThreadSCM>(client.getChannel(MAIN_THREAD_SCM));
 	const extHostSCM = new ExtHostSCM(scmProxy, message => void logProxy.$log('warn', message).catch(() => { /* renderer gone */ }));
+	// A2-2: the debug actor owns the adapter processes and their DAP framing
+	const debugProxy = ProxyChannel.toService<IMainThreadDebug>(client.getChannel(MAIN_THREAD_DEBUG));
+	const extHostDebug = new ExtHostDebug(debugProxy, message => void logProxy.$log('warn', message).catch(() => { /* renderer gone */ }));
 	let apiFactory: ICreateApiFactory | undefined;
 	const extensionsById = new Map<string, IExtensionDescription>();
 	const extensionService = new ExtHostExtensionService(logProxy, (extension) => apiFactory ? apiFactory(extension) : Object.freeze({}));
@@ -142,6 +149,7 @@ function runHost(port: Electron.MessagePortMain): void {
 				workspace: extHostWorkspace,
 				languages: extHostLanguageFeatures,
 				scm: extHostSCM,
+				debug: extHostDebug,
 				commandsProxy,
 				env: initData.env
 			});
@@ -159,6 +167,7 @@ function runHost(port: Electron.MessagePortMain): void {
 		terminate: async (): Promise<void> => {
 			extHostLanguageFeatures.disposeAll();
 			extHostSCM.disposeAll();
+			extHostDebug.disposeAll();
 			await extensionService.deactivateAll();
 			setTimeout(() => process.exit(0), 0);
 		}
@@ -185,6 +194,12 @@ function runHost(port: Electron.MessagePortMain): void {
 
 	server.registerChannel(EXT_HOST_SCM, ProxyChannel.fromService({
 		$acceptInputBoxValue: async (handle: number, value: string) => extHostSCM.$acceptInputBoxValue(handle, value)
+	}, new DisposableStore()));
+
+	server.registerChannel(EXT_HOST_DEBUG, ProxyChannel.fromService({
+		$startDebugging: (configuration: Parameters<typeof extHostDebug.$startDebugging>[0]) => extHostDebug.$startDebugging(configuration),
+		$sendDebugRequest: (sessionId: string, command: string, args: unknown) => extHostDebug.$sendDebugRequest(sessionId, command, args),
+		$stopDebugging: (sessionId: string) => extHostDebug.$stopDebugging(sessionId)
 	}, new DisposableStore()));
 
 	server.registerChannel(EXT_HOST_WORKSPACE, ProxyChannel.fromService({

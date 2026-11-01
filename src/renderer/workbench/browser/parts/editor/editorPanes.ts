@@ -17,11 +17,20 @@ import { MarkerDecorations } from '../../../../editor/contrib/markerDecorations/
 import { SuggestController } from '../../../../editor/contrib/suggest/suggestController.js';
 import { EditorPane, IEditorViewState } from '../../../common/editor/editorPane.js';
 import { EditorInput, EditorInputCapabilities } from '../../../common/editor/editorInput.js';
+import { BreakpointDecorations } from '../../../contrib/debug/browser/breakpointDecorations.js';
+import type { DebugService } from '../../../services/debug/browser/debugService.js';
 import { TextEditorInput } from '../../../common/editor/textEditorInput.js';
 import { CodeEditorService } from '../../../services/editor/browser/codeEditorService.js';
 
 export interface IPaneServices extends IEditorWidgetServices {
 	readonly codeEditorService: CodeEditorService;
+	/**
+	 * A2-2: optional, so the editor stays usable without a debugger. The real workbench wires
+	 * this through an editor-contribution registry (`registerEditorContribution`); we have no
+	 * such registry, so the pane constructs the one contribution it knows about when the
+	 * service is present. That registry is the honest upgrade path.
+	 */
+	readonly debugService?: DebugService;
 }
 
 /** the text editor pane: one EditorWidget (08) around the shared model */
@@ -47,6 +56,10 @@ export class TextEditorPane extends EditorPane {
 		this._register(new SuggestController(this._widget, _services, () => input.resource));
 		this._register(new HoverController(this._widget, _services, () => input.resource));
 		this._register(new MarkerDecorations(this._widget, _services.markers, () => input.resource));
+		// A2-2: gutter breakpoints, reusing 12's margin-layer mechanism
+		if (_services.debugService) {
+			this._register(new BreakpointDecorations(this._widget, _services.debugService, () => input.resource));
+		}
 		// showing the model keeps it alive; closing the pane releases it (refcount in the registry)
 		this._services.codeEditorService.acquire(input.resource);
 	}

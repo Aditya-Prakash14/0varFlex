@@ -94,3 +94,23 @@ export interface IExtHostSCM {
 export interface IExtHostWorkspaceFolders {
 	$acceptWorkspaceFoldersChange(folders: readonly IWireWorkspaceFolder[]): Promise<void>;
 }
+
+import type { IWireDebugConfiguration, IWireDebugResponse } from '../common/platform/extensions/common/extensionHostProtocol.js';
+
+/** A2-2: the debug surface the workbench serves (the host calls these) */
+export interface IMainThreadDebug {
+	$acceptDebugSessionStarted(sessionId: string, type: string, name: string): Promise<void>;
+	$acceptDebugSessionTerminated(sessionId: string): Promise<void>;
+	/** a DAP `event` message from the adapter (stopped, terminated, output, …) */
+	$acceptDebugEvent(sessionId: string, event: string, body: unknown): Promise<void>;
+}
+
+/** A2-2: the host-served debug channel (the renderer calls these) */
+export interface IExtHostDebug {
+	/** resolve a descriptor factory, spawn the adapter, return its session id (null = no factory) */
+	$startDebugging(configuration: IWireDebugConfiguration): Promise<string | null>;
+	/** send one DAP request and wait for its response */
+	$sendDebugRequest(sessionId: string, command: string, args: unknown): Promise<IWireDebugResponse>;
+	/** disconnect and reap the adapter process */
+	$stopDebugging(sessionId: string): Promise<void>;
+}

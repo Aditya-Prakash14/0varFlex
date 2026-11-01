@@ -13,6 +13,7 @@ import {
 	EXT_HOST_DOCUMENTS,
 	EXT_HOST_LANGUAGE_FEATURES,
 	MAIN_THREAD_LANGUAGE_FEATURES,
+	MAIN_THREAD_DEBUG,
 	MAIN_THREAD_SCM,
 	IWireActiveEditor,
 	IWireRange,
@@ -43,6 +44,7 @@ import type { LanguageFeaturesService } from '../../api/common/mainThreadLanguag
 import type { MarkerService } from '../markers/browser/markerService.js';
 import { ConfigurationRegistry } from '../../../../common/platform/configuration/common/configurationRegistry.js';
 import type { SCMService } from '../scm/common/scmService.js';
+import type { DebugService } from '../debug/browser/debugService.js';
 import type { IWireSourceControl } from '../../../../common/platform/extensions/common/extensionHostProtocol.js';
 
 export interface IMainThreadServices {
@@ -59,6 +61,8 @@ export interface IMainThreadServices {
 	readonly markers: MarkerService;
 	/** A2-1: the generic SCM model the host registers providers into */
 	readonly scm: SCMService;
+	/** A2-2: the DAP client; the host owns the adapter process */
+	readonly debug: DebugService;
 	/** late-bound to break the construction cycle with the extension service */
 	readonly getExtensionService: () => ExtensionService;
 }
@@ -253,6 +257,16 @@ export function registerAllMainThreadServices(server: ChannelServer<string>, ser
 		$unregisterSourceControl: async (handle: number) => services.scm.unregisterSourceControl(handle),
 		$updateSourceControl: async (handle: number, state: IWireSourceControl) =>
 			services.scm.updateSourceControl(handle, state)
+	}, new DisposableStore()));
+
+	// ---- A2-2: MainThreadDebug. Adapter lifecycle + DAP events arrive here; the conversation
+	// itself is driven from the workbench's DebugService.
+	server.registerChannel(MAIN_THREAD_DEBUG, ProxyChannel.fromService({
+		$acceptDebugSessionStarted: async (_sessionId: string, type: string, name: string) => {
+			services.logService.info(`debug session started: ${name} (${type})`);
+		},
+		$acceptDebugSessionTerminated: async (sessionId: string) => services.debug.acceptSessionTerminated(sessionId),
+		$acceptDebugEvent: async (sessionId: string, event: string, body: unknown) => services.debug.acceptEvent(sessionId, event, body)
 	}, new DisposableStore()));
 
 	server.registerChannel(MAIN_THREAD_LOG, ProxyChannel.fromService({

@@ -44,6 +44,9 @@ const bundles = [
 	{ in: 'extensions/wordcount/src/extension.ts', out: '../extensions/wordcount/out/extension.js', platform: 'node', format: 'cjs' },
 	// A2-1: source control as an extension (the workbench has no git code)
 	{ in: 'extensions/git-lite/src/extension.ts', out: '../extensions/git-lite/out/extension.js', platform: 'node', format: 'cjs' },
+	// A2-2: the toy debugger — an extension plus a separate ADAPTER process (like a real one)
+	{ in: 'extensions/toy-debug/src/extension.ts', out: '../extensions/toy-debug/out/extension.js', platform: 'node', format: 'cjs' },
+	{ in: 'extensions/toy-debug/src/adapter.ts', out: '../extensions/toy-debug/out/adapter.js', platform: 'node', format: 'cjs' },
 	// 12: the toy language — an extension with a client AND a separate server process
 	{ in: 'extensions/toy-lang/client/src/extension.ts', out: '../extensions/toy-lang/out/extension.js', platform: 'node', format: 'cjs' },
 	{ in: 'extensions/toy-lang/server/src/server.ts', out: '../extensions/toy-lang/out/server.js', platform: 'node', format: 'cjs' },

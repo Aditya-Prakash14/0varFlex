@@ -1,0 +1,12 @@
+# the fixture program: step a counter, stop at a breakpoint, watch it change
+set 0
+inc
+inc
+inc 10
+print
+dec 3
+inc
+print
+dec
+set 42
+print

@@ -230,3 +230,39 @@ the workbench compiling.
 The one shortcut worth flagging: git-lite polls (5s + document-change events) because **the host
 has no file-watcher API** (`createFileSystemWatcher` does not exist). The real extension watches
 `.git/` and the worktree. That is a fourth gap, left open rather than papered over.
+
+### A2-2 (debug/DAP) — one kernel gap, one refactor, one seam worth naming
+
+1. **The framing was buried in an extension.** `Content-Length`-delimited JSON is the *same* base
+   protocol for LSP and DAP, but the reader/writer lived in `extensions/toy-lang/client/src/`.
+   Moved to `src/common/base/parts/protocol/common/messageFraming.ts`; the old path is a
+   re-export so the LSP client is untouched, and `tests/lspFraming.test.ts` now covers the shared
+   copy. One implementation, two protocols — the payoff 12's framing tests were written for.
+
+2. **No editor-contribution registry.** The real workbench registers gutter contributions through
+   `registerEditorContribution`, so the editor never names them. We have no such registry, so
+   `TextEditorPane` takes an *optional* `debugService` and constructs `BreakpointDecorations`
+   itself when present. That optionality keeps the editor usable without a debugger, but it is a
+   **genuine design gap**: the second gutter contribution will want the registry rather than
+   another optional service. Written down rather than papered over.
+
+   What it did *not* need: a new rendering mechanism. Gutter breakpoints reuse 12's margin layer
+   (`view.addMarginLayer` + pooled nodes + viewport-space tops) exactly as the marker dots do.
+
+3. **Where the framing lives is a deliberate deviation.** The reference's `RawDebugSession` frames
+   in the workbench, because its adapters can be in-process or workbench-spawned. Ours only spawns
+   from the extension host (which is Node and already owns child processes), so the host owns the
+   pipe and the workbench speaks DAP in DTOs. The workbench still owns the **conversation** —
+   which requests, in which order, and what the answers mean — which is the part that matters.
+
+Nothing else was needed. The debug composite, the DAP client, the call stack and variables views
+are all contribution code, and the adapter is an extension plus a separate process. Delete
+`extensions/toy-debug/` and debugging disappears while the workbench still compiles — the same
+test A2-1 passed.
+
+**Verified without a GUI:** `tests/debugAdapter.test.ts` drives the real adapter process through
+the full handshake (initialize → setBreakpoints → configurationDone → launch), asserts it stops
+*before* executing the breakpoint line with `counter === 2`, steps, continues to termination, and
+checks the process actually **exits on disconnect** — the "adapter reaped" acceptance item, as a
+test rather than a claim. It found a real bug: `setBreakpoints` arrives before `launch`, so
+verification had to read the source named in the request instead of the not-yet-loaded program.

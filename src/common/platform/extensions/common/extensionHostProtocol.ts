@@ -61,10 +61,14 @@ export const EXT_HOST_LANGUAGE_FEATURES = 'ExtHostLanguageFeatures';
 export const EXT_HOST_SCM = 'ExtHostSCM';
 /** A2: folder changes pushed to the host */
 export const EXT_HOST_WORKSPACE = 'ExtHostWorkspace';
+/** A2-2: the host-served debug channel (adapter lifecycle + DAP requests) */
+export const EXT_HOST_DEBUG = 'ExtHostDebug';
 
 export const MAIN_THREAD_LANGUAGE_FEATURES = 'MainThreadLanguageFeatures';
 /** A2-1: the source control API surface the workbench serves */
 export const MAIN_THREAD_SCM = 'MainThreadSCM';
+/** A2-2: the debug surface the workbench serves */
+export const MAIN_THREAD_DEBUG = 'MainThreadDebug';
 
 // ---- wire DTOs
 
@@ -240,4 +244,35 @@ export interface IWireSourceControl {
 	readonly acceptCommand?: { readonly id: string; readonly args?: readonly unknown[] };
 	/** badge count for the activity bar / view header */
 	readonly count: number;
+}
+
+// ---- A2-2: debug (DAP) wire shapes
+//
+// The split mirrors the real one: the workbench owns the DAP CONVERSATION (which requests, in
+// which order, and what the responses mean) while the adapter PROCESS and its byte framing live
+// where the stdio is — the extension host, which is Node.
+//
+// delta: the reference's RawDebugSession does the framing in the workbench too, because its
+// adapters can be in-process or spawned by the workbench itself. Ours only spawns from the host,
+// so the framing lives there and the workbench speaks DAP in DTOs.
+
+export interface IWireDebugConfiguration {
+	readonly type: string;
+	readonly name: string;
+	readonly request: string;
+	/** everything else the adapter understands (program path, stopOnEntry, …) */
+	readonly [key: string]: unknown;
+}
+
+/** the answer to one DAP request — `success: false` is a protocol answer, not a transport error */
+export interface IWireDebugResponse {
+	readonly success: boolean;
+	readonly body?: unknown;
+	readonly message?: string;
+}
+
+export interface IWireDebugSession {
+	readonly sessionId: string;
+	readonly type: string;
+	readonly name: string;
 }

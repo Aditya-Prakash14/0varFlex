@@ -48,6 +48,9 @@ export class Workbench extends Disposable {
 			} else if (id === 'source-control') {
 				// A2-1: the sidebar's third composite
 				void this._commandService.executeCommand('workbench.view.scm');
+			} else if (id === 'debug') {
+				// A2-2: the sidebar's fourth composite
+				void this._commandService.executeCommand('workbench.view.debug');
 			} else if (id === 'settings') {
 				void this._commandService.executeCommand(OPEN_SETTINGS_JSON_ID);
 			}

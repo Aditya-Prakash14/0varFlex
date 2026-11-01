@@ -1728,3 +1728,216 @@ body {
 .scm-row-letter.letter-c { color: #e4676b; }  /* conflict */
 .scm-row-letter.letter-i { color: #8c8c8c; }  /* ignored */
 .scm-row-letter.letter-t { color: #e2c08d; }  /* type changed */
+
+/* ---- A2-2: the Debug composite and the gutter breakpoints ---- */
+
+.debug-view {
+	position: absolute;
+	inset: 0;
+	display: flex;
+	flex-direction: column;
+	overflow-y: auto;
+	overflow-x: hidden;
+	outline: none;
+	scrollbar-width: none;
+}
+
+.debug-view::-webkit-scrollbar {
+	display: none;
+}
+
+.debug-toolbar {
+	display: flex;
+	gap: 4px;
+	padding: 6px 10px 2px;
+}
+
+.debug-button {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 24px;
+	height: 22px;
+	border-radius: 3px;
+	cursor: pointer;
+	user-select: none;
+	font-size: 13px;
+	color: var(--mini-foreground);
+	outline: none;
+}
+
+.debug-button:hover {
+	background: rgba(255, 255, 255, 0.1);
+}
+
+.debug-button:focus-visible {
+	outline: 1px solid var(--mini-accent);
+}
+
+.debug-button.disabled {
+	opacity: 0.35;
+	cursor: default;
+}
+
+.debug-button.disabled:hover {
+	background: none;
+}
+
+.debug-status {
+	padding: 0 12px 6px;
+	font-size: 11px;
+	color: var(--mini-watermark-dim);
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.debug-section-header {
+	padding: 4px 12px 2px;
+	font-size: 11px;
+	font-weight: 700;
+	text-transform: uppercase;
+	color: var(--mini-foreground);
+	border-top: 1px solid var(--mini-border);
+}
+
+.debug-empty {
+	padding: 2px 12px 4px;
+	font-size: 11px;
+	color: var(--mini-watermark-dim);
+}
+
+.debug-frame,
+.debug-variable,
+.debug-scope,
+.debug-breakpoint {
+	display: flex;
+	align-items: center;
+	height: 22px;
+	padding: 0 12px 0 20px;
+	font-size: 12px;
+	white-space: nowrap;
+	cursor: pointer;
+}
+
+.debug-frame:hover,
+.debug-scope:hover,
+.debug-breakpoint:hover {
+	background: rgba(255, 255, 255, 0.04);
+}
+
+.debug-frame.focused {
+	background: #094771;
+}
+
+.debug-frame-name {
+	flex: 0 0 auto;
+	max-width: 55%;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	font-family: var(--mini-editor-font-family, Menlo, Consolas, monospace);
+}
+
+.debug-frame-line {
+	flex: 1 1 auto;
+	min-width: 0;
+	margin-left: 8px;
+	font-size: 11px;
+	color: var(--mini-watermark-dim);
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.debug-scope {
+	padding-left: 12px;
+	font-weight: 600;
+}
+
+.debug-twisty {
+	flex: 0 0 16px;
+	width: 16px;
+	height: 16px;
+	position: relative;
+	transition: transform 80ms linear;
+}
+
+.debug-twisty::before {
+	content: '';
+	position: absolute;
+	top: 5px;
+	left: 5px;
+	border-left: 4px solid var(--mini-foreground);
+	border-top: 3.5px solid transparent;
+	border-bottom: 3.5px solid transparent;
+}
+
+.debug-twisty.expanded {
+	transform: rotate(90deg);
+}
+
+.debug-variable {
+	cursor: default;
+	padding-left: 32px;
+	font-family: var(--mini-editor-font-family, Menlo, Consolas, monospace);
+	font-size: 11px;
+}
+
+.debug-variable-name {
+	color: #9cdcfe;
+	flex: 0 0 auto;
+}
+
+.debug-variable-name::after {
+	content: ':';
+	color: var(--mini-watermark-dim);
+}
+
+.debug-variable-value {
+	margin-left: 6px;
+	color: #ce9178;
+	flex: 1 1 auto;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.debug-breakpoint-dot {
+	flex: 0 0 auto;
+	width: 8px;
+	height: 8px;
+	margin-right: 8px;
+	border-radius: 50%;
+	background: #e51400;
+}
+
+.debug-breakpoint-name {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	font-size: 11px;
+}
+
+/* the gutter: a red dot per breakpoint, a yellow arrow line for where execution stopped */
+.editor-breakpoint-dots {
+	position: absolute;
+	inset: 0;
+	pointer-events: none;
+}
+
+.breakpoint-dot {
+	position: absolute;
+	left: 4px;
+	width: 8px;
+	height: 8px;
+	border-radius: 50%;
+	background: #e51400;
+}
+
+.breakpoint-dot.current {
+	background: #ffcc00;
+	box-shadow: 0 0 0 2px rgba(255, 204, 0, 0.3);
+}
+
+/* the margin is the breakpoint hit area, so it must accept clicks */
+.editor-margin {
+	cursor: pointer;
+}

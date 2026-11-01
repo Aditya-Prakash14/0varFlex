@@ -53,7 +53,12 @@ import { registerSearchActions } from './workbench/contrib/search/browser/search
 import { SCMService } from './workbench/services/scm/common/scmService.js';
 import { SCMView } from './workbench/contrib/scm/browser/scmView.js';
 import { registerSCMActions } from './workbench/contrib/scm/browser/scmActions.js';
-import { EXT_HOST_SCM, EXT_HOST_WORKSPACE } from '../common/platform/extensions/common/extensionHostProtocol.js';
+import { EXT_HOST_DEBUG, EXT_HOST_SCM, EXT_HOST_WORKSPACE } from '../common/platform/extensions/common/extensionHostProtocol.js';
+// A2-2: the DAP client, the Debug composite and its commands
+import { DebugService } from './workbench/services/debug/browser/debugService.js';
+import { DebugView } from './workbench/contrib/debug/browser/debugView.js';
+import { registerDebugActions } from './workbench/contrib/debug/browser/debugActions.js';
+import type { IWireDebugResponse } from '../common/platform/extensions/common/extensionHostProtocol.js';
 import { registerFileCommands, EXPLORER_ID } from './workbench/contrib/files/browser/fileCommands.js';
 import { confirmDialog } from './workbench/browser/parts/editor/dialogs/confirmDialog.js';
 import { WorkspaceContextService, createWorkspaceFolder, workspaceSettingsUri } from '../common/platform/workspace/common/workspace.js';
@@ -308,6 +313,18 @@ async function main(): Promise<void> {
 	};
 	keybindingService.onDidChangeChordState(updateChordIndicator);
 
+	// ---- A2-2: the debug stack. The transport is late-bound: the extension host manager is
+	// built further down, but the composite must exist when the sidebar registers its tenants.
+	let debugTransportCall: ((method: string, args: unknown[]) => Promise<unknown>) | undefined;
+	const debugService = new DebugService({
+		startDebugging: async configuration =>
+			(await debugTransportCall?.('$startDebugging', [configuration]) ?? null) as string | null,
+		sendRequest: async (sessionId, command, args) =>
+			(await debugTransportCall?.('$sendDebugRequest', [sessionId, command, args])
+				?? { success: false, message: 'the extension host is not running' }) as IWireDebugResponse,
+		stopDebugging: async sessionId => { await debugTransportCall?.('$stopDebugging', [sessionId]); }
+	}, storage, logService);
+
 	// ---- the editor service (exercise 09): groups, tabs, dirty lifecycle and the model
 	// registry. The widget (08) now lives inside panes, one per group showing an input.
 	const editorService = new EditorService(workbench.layout.editor, codeEditorService, fileService, logService, {
@@ -316,7 +333,9 @@ async function main(): Promise<void> {
 		contextKeyService,
 		codeEditorService,
 		languageFeatures,
-		markers: markerService
+		markers: markerService,
+		// A2-2: lets the pane build its gutter-breakpoint contribution
+		debugService
 	});
 	workbench.layout.editor.onDidRequestCloseEditor(({ input, group }) => {
 		void editorService.closeEditor(input, group);
@@ -416,7 +435,19 @@ async function main(): Promise<void> {
 	const scmService = new SCMService();
 	const scmView = new SCMView(sidebarContainer, { scmService, commandService, contextKeyService });
 
-	const showComposite = (id: 'explorer' | 'search' | 'source-control'): void => {
+	const debugView = new DebugView(sidebarContainer, {
+		debugService,
+		contextKeyService,
+		openFrame: (resource, line, column) => {
+			void editorService.openEditor({
+				resource,
+				options: { selection: { lineNumber: line, column }, focus: false }
+			});
+		},
+		start: () => void startToyDebugSession()
+	});
+
+	const showComposite = (id: 'explorer' | 'search' | 'source-control' | 'debug'): void => {
 		if (!workbench.layout.sidebar.visible) {
 			workbench.layout.setSidebarVisible(true);
 		}
@@ -451,6 +482,11 @@ async function main(): Promise<void> {
 			workbench.layout.sidebar.updateTitle();
 		}
 	});
+	workbench.layout.sidebar.registerComposite({
+		id: 'debug',
+		element: debugView.element,
+		getTitle: () => 'RUN AND DEBUG'
+	});
 	workbench.layout.sidebar.showComposite('explorer');
 
 	registerSearchActions({
@@ -461,6 +497,36 @@ async function main(): Promise<void> {
 		getView: () => scmView,
 		showScmView: () => showComposite('source-control'),
 		editorService
+	});
+
+	// A2-2: there is no launch.json, so the start action uses one hardcoded configuration —
+	// the toy program shipped with the toy-debug extension (or the active .toy file).
+	const startToyDebugSession = async (): Promise<void> => {
+		// an active .toy file is the program; otherwise the adapter falls back to the fixture it
+		// ships with (the renderer has no business knowing where extensions live)
+		const active = editorService.activeInput?.getResource();
+		const program = active?.fsPath.endsWith('.toy') ? active.fsPath : '';
+		const started = await debugService.start({ type: 'toy', name: 'Toy Program', program, stopOnEntry: false });
+		if (!started) {
+			void notifications.show({
+				severity: 'error',
+				message: "Could not start debugging: no adapter for type 'toy' (is the toy-debug extension active?)"
+			});
+		}
+	};
+
+	registerDebugActions({
+		debugService,
+		getView: () => debugView,
+		showDebugView: () => showComposite('debug'),
+		start: () => void startToyDebugSession(),
+		toggleBreakpointAtCursor: () => {
+			const resource = editorService.activeInput?.getResource();
+			const widget = getActiveWidget();
+			if (resource && widget) {
+				void debugService.toggleBreakpoint(resource, widget.getSelection().getPosition().lineNumber);
+			}
+		}
 	});
 
 	const updateWorkspaceUi = (): void => {
@@ -632,6 +698,7 @@ async function main(): Promise<void> {
 		languageFeatures,
 		markers: markerService,
 		scm: scmService,
+		debug: debugService,
 		getExtensionService: () => extensionService
 	};
 	const documentMirror = new WorkbenchDocuments(mainThreadServiceHost);
@@ -668,6 +735,9 @@ async function main(): Promise<void> {
 			env: { appName: '0varflex', appVersion: windowInfo.appVersion }
 		}
 	});
+
+	// A2-2: now that the host manager exists, give the debug transport its channel
+	debugTransportCall = (method, args) => hostManager.callHostService(EXT_HOST_DEBUG, method, args);
 
 	// A2-1: the commit box mirrors back to whichever provider owns the repository
 	scmService.setInputSink((handle, value) => {

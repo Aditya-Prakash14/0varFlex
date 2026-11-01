@@ -1,7 +1,7 @@
 // src/renderer/workbench/browser/parts/activitybar/activitybarPart.ts — the icon column.
 // vs/workbench/browser/parts/activitybar/activitybarPart.ts hosts the composite bar; ours has
-// two placeholder icons and three real actions (Explorer and Search switch the sidebar's
-// composite, the gear opens settings.json).
+// no placeholders left: Explorer, Search, Source Control and Run-and-Debug each switch the
+// sidebar's composite, and the gear opens settings.json.
 
 import { Emitter } from '../../../../../common/base/common/event.js';
 import { addDisposableListener, append, $ } from '../../../../base/browser/dom.js';
@@ -31,7 +31,8 @@ const ENTRIES: IActivityBarEntry[] = [
 	{ id: 'search', title: 'Search', icon: ICONS['search'], enabled: true },
 	// A2-1: a real composite now — whatever provider registers renders in it
 	{ id: 'source-control', title: 'Source Control', icon: ICONS['source-control'], enabled: true },
-	{ id: 'debug', title: 'Run and Debug (coming later)', icon: ICONS['debug'], enabled: false },
+	// A2-2: the DAP client ships with the workbench; adapters arrive as extensions
+	{ id: 'debug', title: 'Run and Debug', icon: ICONS['debug'], enabled: true },
 	// the gear sits at the bottom (margin-top: auto) — exercise 06
 	{ id: 'settings', title: 'Manage', icon: ICONS['settings'], enabled: true }
 ];

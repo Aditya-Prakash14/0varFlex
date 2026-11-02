@@ -4,13 +4,12 @@
 //   - atomic writes: write `<name><postfix>` in the SAME directory, flush it (fsync — the
 //     reference's write handles flush lazily; syncing before the rename matters on macOS), then
 //     rename over the target; on rename failure the temp file is cleaned up;
-//   - deletes default to the OS trash (Electron shell.trashItem) with a logged rm fallback for
+//   - deletes default to the OS trash (an injected shell.trashItem) with a logged rm fallback for
 //     volumes where trash is unavailable;
 //   - rename keeps the reference's EXDEV fallback (copy + delete) and skips the Windows
 //     retry-in-use dance (documented delta — mac-only app);
 //   - node errors map to the ported FileSystemProviderErrorCode table.
 
-import { shell } from 'electron';
 import { promises as fs } from 'node:fs';
 import * as path from 'node:path';
 import { URI } from '../../common/base/common/uri.js';
@@ -75,6 +74,19 @@ export class DiskFileSystemProvider implements IFileSystemProvider {
 
 	private _log: (message: string) => void = () => { /* logging arrives via the channel */ };
 
+	/**
+	 * Move a file to the OS trash.
+	 *
+	 * Injected rather than imported, because importing electron at the top of this module made
+	 * this whole module unimportable outside Electron — including from tests, which is why the
+	 * provider had none and a missing mkdir went unnoticed. main.ts supplies the real one.
+	 */
+	private _trashItem: ((fsPath: string) => Promise<void>) | undefined;
+
+	setTrashItem(trashItem: (fsPath: string) => Promise<void>): void {
+		this._trashItem = trashItem;
+	}
+
 	setLogger(log: (message: string) => void): void {
 		this._log = log;
 	}
@@ -121,7 +133,10 @@ export class DiskFileSystemProvider implements IFileSystemProvider {
 		try {
 			// 1. write the temp file and flush it to disk
 			await this._doWriteFile(URI.file(tempPath), content, { overwrite: true });
-			const handle = await fs.open(tempPath, 'r');
+			// 'r+' and not 'r': Windows refuses FlushFileBuffers on a read-only handle with
+			// EPERM, so every atomic write — which is every settings write — failed here. The
+			// course was written on macOS, where fsync on a read handle is allowed.
+			const handle = await fs.open(tempPath, 'r+');
 			try {
 				await handle.sync();
 			} finally {
@@ -141,6 +156,12 @@ export class DiskFileSystemProvider implements IFileSystemProvider {
 			if (options.overwrite === false && await this._exists(resource.fsPath)) {
 				throw createFileSystemProviderError('File already exists', FileSystemProviderErrorCode.FileExists);
 			}
+			// the reference's FileService mkdirp's the parent before writing, and it has to: the
+			// settings file lives in a directory nothing else creates, so the FIRST attempt to
+			// change a setting failed with ENOENT on a fresh profile. Found by awaiting a write
+			// that nothing had been awaiting. Covers the atomic path too — the temp file is a
+			// sibling of the target.
+			await fs.mkdir(path.dirname(resource.fsPath), { recursive: true });
 			await fs.writeFile(resource.fsPath, content, 'utf8');
 		} catch (error) {
 			throw toFileSystemProviderError(error as NodeJS.ErrnoException);
@@ -150,14 +171,17 @@ export class DiskFileSystemProvider implements IFileSystemProvider {
 	// ---- delete / create / rename / copy
 
 	async delete(resource: URI, options: IFileDeleteOptions): Promise<void> {
-		if (options.useTrash) {
+		if (options.useTrash && this._trashItem) {
 			try {
-				await shell.trashItem(resource.fsPath);
+				await this._trashItem(resource.fsPath);
 				return;
 			} catch (error) {
 				// trash is unavailable on some volumes — fall back to a plain delete, loudly
 				this._log(`trash failed for ${resource.fsPath} (${(error as Error).message}), falling back to rm`);
 			}
+		} else if (options.useTrash) {
+			// nobody supplied a trash implementation; an rm is better than refusing the delete
+			this._log(`no trash available for ${resource.fsPath}, falling back to rm`);
 		}
 		try {
 			await fs.rm(resource.fsPath, { recursive: true, force: false });

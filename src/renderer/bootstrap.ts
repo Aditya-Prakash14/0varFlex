@@ -22,6 +22,8 @@ import { registerHoverCommands, hoverControllerFor } from './editor/contrib/hove
 import { registerSuggestCommands, suggestControllerFor } from './editor/contrib/suggest/suggestController.js';
 import { bracketMatchingControllerFor, registerBracketMatchingCommands } from './editor/contrib/bracketMatching/bracketMatchingController.js';
 import { findControllerFor, registerFindCommands } from './editor/contrib/find/findController.js';
+import { gotoErrorControllerFor, registerGotoErrorCommands } from './editor/contrib/gotoError/gotoErrorController.js';
+import { stickyScrollControllerFor } from './editor/contrib/stickyScroll/stickyScrollController.js';
 import { registerLineOperationCommands } from './editor/contrib/linesOperations/linesOperations.js';
 import { TextEditorInput } from './workbench/common/editor/textEditorInput.js';
 import { CommandMetadata, CommandsRegistry, ICommandService } from './platform/commands/common/commands.js';
@@ -85,7 +87,7 @@ import { ExtensionHostManager } from './workbench/services/extensions/extensionH
 import { registerAllMainThreadServices, snapshotConfiguration, WorkbenchDocuments } from './workbench/services/extensions/mainThreadServices.js';
 import { registerExtensionContributions } from './workbench/services/extensions/extensionRegistries.js';
 import { LanguageService } from './workbench/services/languages/common/languageService.js';
-import { MarkerService } from './workbench/services/markers/browser/markerService.js';
+import { IMarkerData, MarkerService } from './workbench/services/markers/browser/markerService.js';
 import { LanguageFeaturesService } from './workbench/api/common/mainThreadLanguageFeatures.js';
 import { NotificationService } from './workbench/services/notifications/browser/notificationService.js';
 import { registerLayoutCommands, SHOW_ALL_COMMANDS_ID } from './workbench/contrib/layout/browser/layoutActions.js';
@@ -382,6 +384,7 @@ async function main(): Promise<void> {
 		})
 	});
 	registerBracketMatchingCommands(() => bracketMatchingControllerFor(getActiveWidget()));
+	registerGotoErrorCommands(() => gotoErrorControllerFor(getActiveWidget()));
 	registerHoverCommands(() => hoverControllerFor(getActiveWidget()));
 	registerProblemsView({
 		markers: markerService,
@@ -598,7 +601,10 @@ async function main(): Promise<void> {
 		setShowOnStartup: show => {
 			// unchecking means "never"; checking restores the useful default rather than
 			// always showing it even with a folder open
-			void configurationService.updateValue(STARTUP_EDITOR_SETTING, show ? 'welcomePageInEmptyWorkbench' : 'none');
+			// a failed settings write used to be swallowed by `void`, so the checkbox looked like
+			// it had worked and the choice was silently lost
+			configurationService.updateValue(STARTUP_EDITOR_SETTING, show ? 'welcomePageInEmptyWorkbench' : 'none')
+				.catch(error => logService.error(`cannot save ${STARTUP_EDITOR_SETTING}: ${(error as Error).message}`));
 		},
 		onDidChangeState: welcomeState.onDidChangeState
 	};
@@ -1006,7 +1012,16 @@ async function main(): Promise<void> {
 					stats: getActiveWidget()?.getPerfStats() ?? null
 				};
 			})();
-		}
+		},
+		/** B2: publish markers for the active file, so the F8 walk can be driven */
+		setMarkers: (markers: readonly IMarkerData[]) => {
+			const resource = editorService.activeInput?.getResource();
+			if (resource) {
+				markerService.changeOne('dev', resource, markers);
+			}
+		},
+		/** B2: the model lines sticky scroll currently has pinned */
+		getPinnedLines: () => stickyScrollControllerFor(getActiveWidget())?.getPinnedLines() ?? []
 	};
 
 	const devEditors = {

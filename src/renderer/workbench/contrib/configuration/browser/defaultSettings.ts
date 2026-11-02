@@ -36,6 +36,18 @@ const defaultSettings: IConfigurationNode = {
 			minimum: 1,
 			description: 'The number of spaces a tab is equal to.'
 		},
+		'editor.stickyScroll.enabled': {
+			type: 'boolean',
+			default: true,
+			description: 'Shows the nested current scopes during the scroll at the top of the editor.'
+		},
+		'editor.stickyScroll.maxLineCount': {
+			type: 'number',
+			default: 5,
+			minimum: 1,
+			maximum: 20,
+			description: 'Defines the maximum number of sticky lines to show.'
+		},
 		'editor.lineNumbers': {
 			type: 'string',
 			enum: ['on', 'off', 'relative', 'interval'],

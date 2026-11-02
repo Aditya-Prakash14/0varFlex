@@ -14,7 +14,9 @@ import { append, $ } from '../../../../base/browser/dom.js';
 import { Selection } from '../../../../editor/browser/core/selection.js';
 import { EditorWidget, IEditorWidgetServices } from '../../../../editor/browser/editorWidget.js';
 import { BracketMatchingController, registerBracketMatchingController } from '../../../../editor/contrib/bracketMatching/bracketMatchingController.js';
+import { GotoErrorController, registerGotoErrorController } from '../../../../editor/contrib/gotoError/gotoErrorController.js';
 import { HoverController } from '../../../../editor/contrib/hover/hoverController.js';
+import { registerStickyScrollController, StickyScrollController } from '../../../../editor/contrib/stickyScroll/stickyScrollController.js';
 import { MarkerDecorations } from '../../../../editor/contrib/markerDecorations/markerDecorations.js';
 import { SuggestController } from '../../../../editor/contrib/suggest/suggestController.js';
 import { EditorPane, IEditorViewState } from '../../../common/editor/editorPane.js';
@@ -68,6 +70,12 @@ export class TextEditorPane extends EditorPane {
 		registerFindController(this._widget, find);
 		// B1: bracket highlight + Ctrl+Shift+\, resolved through the same per-widget lookup
 		registerBracketMatchingController(this._widget, this._register(new BracketMatchingController(this._widget)));
+		// B2: F8 / Shift+F8 walk this file's markers
+		registerGotoErrorController(this._widget, this._register(
+			new GotoErrorController(this._widget, _services.markers, () => input.resource, this.element)));
+		// B2: the enclosing scopes pinned at the top while scrolling
+		registerStickyScrollController(this._widget, this._register(
+			new StickyScrollController(this._widget, _services.configuration)));
 		const findVisible = FindWidgetVisibleContext.bindTo(_services.contextKeyService);
 		this._register(find.onDidChangeVisibility(visible => findVisible.set(visible)));
 		// A2-2: gutter breakpoints, reusing 12's margin-layer mechanism

@@ -2358,6 +2358,54 @@ body {
 	outline: 1px solid #f38518;
 }
 
+/* ---- sticky scroll (B2): the enclosing scopes, pinned over the content ---- */
+
+.editor-sticky-scroll {
+	position: absolute;
+	top: 0;
+	right: 0;
+	z-index: 10;
+	overflow: hidden;
+	background: var(--mini-background);
+	box-shadow: 0 2px 4px rgba(0, 0, 0, 0.35);
+}
+
+.sticky-line {
+	cursor: pointer;
+	padding-left: 0;
+}
+
+.sticky-line:hover {
+	background: rgba(255, 255, 255, 0.06);
+}
+
+/* ---- the marker banner (B2): F8's one-line answer, not a peek panel ---- */
+
+.editor-marker-banner {
+	position: absolute;
+	bottom: 0;
+	left: 0;
+	right: 0;
+	z-index: 12;
+	padding: 4px 10px;
+	font-size: 12px;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	cursor: pointer;
+	background: #252526;
+	border-top: 1px solid #454545;
+	color: #cccccc;
+}
+
+.editor-marker-banner.error {
+	border-top-color: #f14c4c;
+}
+
+.editor-marker-banner.warning {
+	border-top-color: #cca700;
+}
+
 /* ---- bracket matching (B1): an outline, not a fill, so the character stays readable ---- */
 
 .editor-bracket-matches {

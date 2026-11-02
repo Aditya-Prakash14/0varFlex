@@ -21,6 +21,12 @@ await esbuild.build({
 	sourcemap: true,
 	// jsonc-parser's UMD entry uses dynamic require; point at its ESM build
 	alias: { 'jsonc-parser': path.join(root, 'node_modules/jsonc-parser/lib/esm/main.js') },
+	// tests run on plain node, so electron must not be bundled: its entry point uses a dynamic
+	// require that an ESM bundle cannot express. Left external it resolves at runtime and only
+	// fails if a test actually reaches into it, which is the behaviour we want — before this, a
+	// module importing electron at all could not be tested, which is why the disk file provider
+	// had no tests and a missing mkdir went unnoticed.
+	external: ['electron'],
 });
 
 const outputs = testFiles.map(f => path.join(out, f.replace(/\.ts$/, '.js')));

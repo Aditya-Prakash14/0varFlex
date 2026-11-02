@@ -50,7 +50,7 @@ The things whose absence makes an editor feel unfinished within a minute.
 
 | Item | Reference | Ids / keys | Done when |
 |---|---|---|---|
-| **Folding** | `editor/contrib/folding` | `editor.fold`/`unfold` (Ctrl+Shift+[/]), fold all/unfold all | Indentation-based ranges fold, the gutter shows chevrons, folded state survives scrolling |
+| **Folding** — *moved to B5, see below* | `editor/contrib/folding` | `editor.fold`/`unfold` (Ctrl+Shift+[/]), fold all/unfold all | Indentation-based ranges fold, the gutter shows chevrons, folded state survives scrolling |
 | **Multi-cursor** | `editor/contrib/multicursor` | `insertCursorAbove/Below` (Ctrl+Alt+↑/↓), `addSelectionToNextFindMatch` (Ctrl+D) | Typing edits every cursor as one undo step |
 | **Go to next/previous problem** | `editor/contrib/gotoError` | `marker.next` (F8), `marker.prev` (Shift+F8) | Walks the marker list and reveals each |
 | **Outline + breadcrumbs** | `workbench/contrib/outline` | `outline.focus` | Symbols listed from the language provider, click reveals |
@@ -79,8 +79,15 @@ The things whose absence makes an editor feel unfinished within a minute.
 
 ## B5 — Engines (deliberately last: large, and nothing above depends on them)
 
-- **Word wrap** — the real coordinate-system port; touches every geometry call in 08. Start at
-  `editor/common/viewModel` (wrapping lines). Expect it to break every pixel assumption.
+- **The view-line mapping** — *this document originally had word wrap here and folding in B2, as
+  if they were independent. They are not: both need the same thing first.* Today
+  `viewModel.getLineTop(n)` is `(n - 1) × lineHeight` and 16 call sites across 13 files assume it.
+  Hiding lines (folding) and splitting lines (wrap) both break that assumption, so the model-line
+  ↔ view-line mapping is one prerequisite serving both. Do it once, then folding and wrap are
+  each small. Start at `editor/common/viewModel`.
+- **Folding** — `editor/contrib/folding`, on top of the mapping above. The range computation is
+  already done and tested (`common/editor/common/model/indentRanges.ts`, shared with sticky
+  scroll), so what remains is the gutter chevrons and the hidden-line plumbing.
 - **Piece-tree buffer** — `editor/common/model/pieceTreeTextBuffer`. The documented answer to the
   "what breaks at 10×" question; only worth it once large files are actually opened.
 - **Minimap**, **semantic tokens**, **notebooks**, **webviews**, **testing**, **remote/SSH**,
@@ -109,7 +116,22 @@ editor's usefulness, and porting them would be cargo-culting.
     `common/editor/common/languages/languageConfiguration.ts`: comment tokens, bracket pairs and
     auto-closing pairs. The pane sets it on the widget from the input's resource.
   - 459 tests pass; 63 of them cover B1's pure logic.
-- B2 — next, in the order above.
+- **B2 — in progress.**
+  - Go to next/previous problem: **done.** `editor.action.marker.next` / `.prev` (F8 / Shift+F8)
+    in `editor/contrib/gotoError/`, over a tested walk in `markerNavigation.ts`.
+  - Sticky scroll: **done.** `editor/contrib/stickyScroll/` over
+    `common/editor/common/model/indentRanges.ts`, with the real `editor.stickyScroll.enabled` and
+    `editor.stickyScroll.maxLineCount` settings.
+  - **Folding: moved to B5.** It needs the view-line mapping, which is the same prerequisite word
+    wrap needs — see B5. Its range computation is already written and tested.
+  - Multi-cursor: not started. Does *not* need the mapping; it needs the cursor controller to hold
+    more than one selection.
+  - **Outline + breadcrumbs: blocked, honestly.** The done-when is "symbols listed from the
+    language provider" and there is no document-symbol provider: `languageFeatures` carries
+    completion and hover only. It needs a new provider chain (extHost API, wire protocol,
+    registry) before any UI is worth writing. An indentation-guessed outline would look like the
+    feature without being it.
+  - 506 tests pass.
 
 ### Known deltas carried by B1
 
@@ -122,3 +144,29 @@ editor's usefulness, and porting them would be cargo-culting.
   "surround the selection with a pair" either.
 - There is no `editor.insertSpaces` setting, so indentation inserts a tab, matching the existing
   `tab` command.
+
+### Known deltas carried by B2
+
+- F8 shows a one-line banner, not the reference's peek widget with related-information links and
+  next/previous buttons (`shortcut:` in `gotoErrorController.ts`).
+- F8 walks the open file only; the reference also has `marker.nextInFiles`.
+- Sticky scroll's pinned rows have no line numbers and do not follow horizontal scrolling. Both
+  want the same gutter work folding does.
+- Scope detection is indentation-based. The reference prefers a language-aware provider and falls
+  back to indentation; we only have the fallback.
+
+### Bugs found by driving the real app (not by the tests)
+
+Three, all pre-existing and none visible from a unit test:
+
+1. **Every atomic write failed on Windows.** The temp file was opened `'r'` and then `fsync`ed;
+   Windows returns `EPERM` for `FlushFileBuffers` on a read-only handle. Atomic writes are how
+   settings are saved, so no setting had ever persisted on this platform. The course was written
+   on macOS, where fsync on a read handle is allowed.
+2. **`writeFile` never created the parent directory.** The settings file lives in a directory
+   nothing else creates, so a fresh profile failed with `ENOENT` before even reaching (1).
+3. **The failure was invisible** because the only caller discarded the rejection with `void`.
+
+(1) and (2) now have tests, which needed `electron` marked external in the test build — the disk
+provider imported it at module load, so it could not be imported from a test at all. That is why
+the file had no tests.

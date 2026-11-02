@@ -13,7 +13,7 @@
 //   - the update service (electron-updater against the generic feed) is created and started here;
 //     the renderer drives its UI over the window channel.
 
-import { app, BrowserWindow, clipboard, dialog, ipcMain } from 'electron';
+import { app, BrowserWindow, clipboard, dialog, ipcMain, shell } from 'electron';
 import { Event } from '../common/base/common/event.js';
 import type { ILogService } from '../common/platform/log/common/log.js';
 import { statSync } from 'node:fs';
@@ -164,6 +164,8 @@ function main(): void {
 		// 10: the file stack also lives in main: disk provider + watcher behind the `file` channel
 		const diskProvider = new DiskFileSystemProvider();
 		diskProvider.setLogger(message => console.log('[file]', message));
+		// the provider does not import electron, so the trash comes from here
+		diskProvider.setTrashItem(fsPath => shell.trashItem(fsPath));
 		fileService = new FileService();
 		fileService.registerProvider('file', diskProvider);
 		const watcher = createFileWatcher(changes => fileService.fireFileChanges(changes), message => console.log('[file]', message));

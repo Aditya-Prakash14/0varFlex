@@ -125,7 +125,9 @@ function createWindow(): void {
 	});
 
 	win.once('ready-to-show', () => win.show());
-	void win.loadFile(path.join(__dirname, 'index.html'));
+	// a rejection here means a blank window, which is otherwise entirely undiagnosable
+	win.loadFile(path.join(__dirname, 'index.html'))
+		.catch(error => console.error('[main] failed to load the workbench:', error));
 }
 
 // The one IPC endpoint of exercise 00: the renderer asks "mini:ping", the main process answers.

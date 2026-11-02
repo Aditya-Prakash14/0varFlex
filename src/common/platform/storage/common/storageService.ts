@@ -115,10 +115,19 @@ export class BrowserStorageService extends Disposable implements IStorageService
 			for (const key of keys) {
 				updates.push([key, this._cache.get(scope)?.get(key) ?? null]);
 			}
+			// cleared BEFORE the write on purpose, so a `set` arriving during the await lands in a
+			// fresh set instead of being swallowed by this flush
 			this._dirty.delete(scope);
 			try {
 				await this._channel.call('flushUpdates', [scope, updates]);
 			} catch (error) {
+				// put the keys back: they were already cleared, so without this the state is
+				// dropped for good and no later flush would ever retry it. Not rescheduled here —
+				// a permanently broken channel would turn that into an endless retry loop — so
+				// these ride along with the next write or the shutdown snapshot.
+				for (const [key] of updates) {
+					this._markDirty(key, scope);
+				}
 				this._logService.error(`storage flush failed: ${(error as Error).message}`);
 			}
 		}

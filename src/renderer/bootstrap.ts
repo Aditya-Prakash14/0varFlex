@@ -366,7 +366,11 @@ async function main(): Promise<void> {
 	};
 
 	registerEditorCommands(getActiveWidget);
-	registerEditorActions(editorService, workbench.layout.editor, fileService, userDataPath);
+	// created here rather than beside the other shipping services: the editor actions below report
+	// failed file operations through it, and they are registered first
+	const notifications = new NotificationService();
+	registerEditorActions(editorService, workbench.layout.editor, fileService, userDataPath,
+		message => void notifications.show({ severity: 'error', message }));
 	registerConfigurationActions(configurationService.getSettingsPath(), fsPath => {
 		void editorService.openEditor({ resource: URI.file(fsPath) });
 	});
@@ -500,7 +504,15 @@ async function main(): Promise<void> {
 		for (const path of paths) {
 			const input = editorService.getInput(path);
 			if (input) {
-				void input.revert();
+				// a failed revert leaves the editor showing stale text over the agent's new file
+				// content, and the next save would clobber the agent's work — so say so
+				input.revert().catch(error => {
+					logService.error(`cannot reload ${path.fsPath} after the agent edited it: ${(error as Error).message}`);
+					void notifications.show({
+						severity: 'warning',
+						message: `${input.getName()} was changed on disk but could not be reloaded. Close and reopen it before saving.`
+					});
+				});
 			}
 		}
 	});
@@ -846,7 +858,6 @@ async function main(): Promise<void> {
 	const languageService = new LanguageService(logService);
 	// 12: the provider registry resolves resource → languageId through 11's LanguageService
 	languageFeatures.setLanguageIdResolver(resource => languageService.languageIdForResource(resource));
-	const notifications = new NotificationService();
 	// 14: the shipping surface — About, the `0varflex` PATH install and the update loop's UI
 	registerShippingActions(windowChannel, notifications, workbench.layout.statusbar);
 	const extensionService = new ExtensionService(logService);

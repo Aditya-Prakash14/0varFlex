@@ -58,11 +58,24 @@ export function registerEditorActions(
 	editorService: EditorService,
 	editorPart: EditorPart,
 	fileService: IFileService,
-	userDataPath: string
+	userDataPath: string,
+	/** how a failed file action reaches the user; see `register` below */
+	reportError: (message: string) => void = () => { /* tests register without a UI */ }
 ): IDisposable {
 	const disposables: IDisposable[] = [];
 	const register = (id: string, title: string, category: string, handler: () => unknown): void => {
-		disposables.push(CommandsRegistry.registerCommand(id, () => handler()));
+		disposables.push(CommandsRegistry.registerCommand(id, async () => {
+			try {
+				return await handler();
+			} catch (error) {
+				// A failed file action has to be visible. Keybinding dispatch only logs, so a save
+				// that could not write looked identical to one that worked — the editor stayed
+				// dirty with no reason given, and on Windows EVERY save failed that way. The title
+				// is in the message because the toast is all the user gets.
+				reportError(`${title} failed: ${(error as Error).message}`);
+				throw error;
+			}
+		}));
 		disposables.push(CommandMetadata.register({ id, title, category }));
 	};
 

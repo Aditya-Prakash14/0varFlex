@@ -133,3 +133,39 @@ test('storage: sync reads, debounced writes, markers, flush and recovery', async
 		await rm(dir, { recursive: true, force: true });
 	}
 });
+
+test('storage: a failed flush keeps the state for the next write instead of dropping it', async () => {
+	const dir = await mkdtemp(path.join(os.tmpdir(), 'mini-storage-retry-'));
+
+	try {
+		const main = new StorageMainService(dir);
+		// the dirty set is cleared BEFORE the write (so a concurrent `set` is not swallowed), so a
+		// failure that does not put the keys back loses that state permanently
+		let failNextFlush = false;
+		const channel = {
+			call: <T>(command: string, arg?: unknown[]): Promise<T> => {
+				if (command === 'flushUpdates' && failNextFlush) {
+					failNextFlush = false;
+					return Promise.reject(new Error('channel is down')) as Promise<T>;
+				}
+				return main.call(undefined, command, arg) as Promise<T>;
+			},
+			listen: (() => { throw new Error('no events'); }) as unknown as IChannel['listen']
+		};
+
+		const storage = new BrowserStorageService(channel, makeLogService(), 30);
+		await storage.initialize(StorageScope.APPLICATION);
+
+		failNextFlush = true;
+		storage.store('survives', 'yes', StorageScope.APPLICATION);
+		await storage.flush(); // swallows the error by design, and must re-mark the key
+
+		// the cache still answers, but the point is the next flush actually writes it
+		assert.equal(storage.get('survives', StorageScope.APPLICATION), 'yes');
+		await storage.flush();
+		const written = JSON.parse(await readFile(main.getFilePath(StorageScope.APPLICATION), 'utf8'));
+		assert.equal(written['survives'], 'yes', 'a key whose flush failed must be retried, not dropped');
+	} finally {
+		await rm(dir, { recursive: true, force: true });
+	}
+});

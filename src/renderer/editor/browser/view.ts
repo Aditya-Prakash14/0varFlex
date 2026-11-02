@@ -31,6 +31,8 @@ export interface IRenderContext {
 	readonly viewModel: ViewModel;
 	readonly options: IEditorOptions;
 	readonly selection: Selection;
+	/** every cursor, primary first in the list order the controller reports */
+	readonly selections: readonly Selection[];
 	readonly scrollTop: number;
 	readonly cursorVisible: boolean;
 	readonly stats: IRenderStats;

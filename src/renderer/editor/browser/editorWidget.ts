@@ -13,6 +13,7 @@ import { Position } from '../../../common/editor/common/core/position.js';
 import { Range } from '../../../common/editor/common/core/range.js';
 import { ILanguageConfiguration, languageConfigurationFor } from '../../../common/editor/common/languages/languageConfiguration.js';
 import { autoClosingTypeResult } from '../../../common/editor/common/model/bracketMatching.js';
+import { editsForCursors, positionsAfterInsert } from '../../../common/editor/common/model/multiCursor.js';
 import { TextModel } from '../../../common/editor/common/model/textModel.js';
 import { IConfigurationService } from '../../../common/platform/configuration/common/configuration.js';
 import { append, $ } from '../../base/browser/dom.js';
@@ -196,6 +197,24 @@ export class EditorWidget extends Disposable {
 		return this._cursorController.getSelection();
 	}
 
+	/** B2: every cursor, primary included — `getSelection()` stays the primary */
+	getSelections(): Selection[] {
+		return this._cursorController.getSelections();
+	}
+
+	setSelections(selections: readonly Selection[], primaryIndex: number = 0): void {
+		this._cursorController.setSelections(selections, primaryIndex);
+	}
+
+	hasMultipleCursors(): boolean {
+		return this._cursorController.hasMultipleCursors();
+	}
+
+	/** drop the extra cursors, keeping the primary */
+	collapseToPrimaryCursor(): void {
+		this._cursorController.collapseToPrimary();
+	}
+
 	setSelection(selection: Selection): void {
 		this._cursorController.setSelection(selection);
 	}
@@ -252,6 +271,15 @@ export class EditorWidget extends Disposable {
 			})
 			: null;
 
+		// B2: with several cursors, one keystroke is one edit per cursor and ONE undo step. Done
+		// before the auto-closing branch because auto-closing is a single-cursor behaviour in the
+		// reference too, and mixing the two would need a per-cursor decision.
+		if (this._cursorController.hasMultipleCursors() && !isCompositionCommit) {
+			this._typeAtEveryCursor(text);
+			this._onDidEdit.fire({ kind: 'type', text });
+			return;
+		}
+
 		if (auto?.overtype) {
 			// the closer is already there: step over it rather than inserting a second one. No edit
 			// at all, so this cannot land on the undo stack as an empty step.
@@ -268,6 +296,30 @@ export class EditorWidget extends Disposable {
 			model.pushStackElement();
 		}
 		this._onDidEdit.fire({ kind: 'type', text });
+	}
+
+	/**
+	 * Insert `text` at every cursor as one edit, and leave a cursor after each insertion.
+	 *
+	 * The model already sorts a multi-operation edit, rejects overlaps and groups it into a single
+	 * undo element, so this needs nothing from the edit stack — the work is only in computing
+	 * where the cursors end up, which `positionsAfterInsert` does and which is tested.
+	 */
+	private _typeAtEveryCursor(text: string): void {
+		const model = this._model;
+		if (!model || this._readonly) {
+			return; // the same gate _pushEdit applies
+		}
+		const selections = this._cursorController.getSelections();
+		const before = this._cursorState();
+		const edits = editsForCursors(selections, text);
+		const after = positionsAfterInsert(selections, text);
+
+		model.pushEditOperations(before, edits, () => null);
+		this._cursorController.setSelections(
+			after.map(position => new Selection(position.lineNumber, position.column, position.lineNumber, position.column))
+		);
+		this._rebuildModelState();
 	}
 
 	/**
@@ -568,6 +620,8 @@ export class EditorWidget extends Disposable {
 			viewModel: this._viewModel,
 			options: this._editorOptions,
 			selection,
+			// B2: every cursor, for the layers that draw them all; `selection` stays the primary
+			selections: this._cursorController.getSelections(),
 			scrollTop: this.view.getScrollTop(),
 			cursorVisible: this._computeCursorVisible(),
 			stats: { renderedLines: 0 }

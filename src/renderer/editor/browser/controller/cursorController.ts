@@ -12,6 +12,7 @@
 
 import { Disposable } from '../../../../common/base/common/lifecycle.js';
 import { Position } from '../../../../common/editor/common/core/position.js';
+import { normalizeCursors } from '../../../../common/editor/common/model/multiCursor.js';
 import type { TextModel } from '../../../../common/editor/common/model/textModel.js';
 import {
 	firstNonWhitespaceColumn,
@@ -58,6 +59,8 @@ export class CursorController extends Disposable {
 
 	private _model: TextModel | null = null;
 	private _selection: Selection = new Selection(1, 1, 1, 1);
+	/** B2: the extra cursors; the primary is kept separate so getSelection() still means one thing */
+	private _secondary: Selection[] = [];
 	/** upstream's leftoverVisibleColumns: the desired column survives short lines through this */
 	private _leftoverVisibleColumns = 0;
 
@@ -73,13 +76,58 @@ export class CursorController extends Disposable {
 		this.setSelection(new Selection(1, 1, 1, 1));
 	}
 
+	/** the PRIMARY selection — what every existing caller means by "the selection" */
 	getSelection(): Selection {
 		return this._selection;
 	}
 
+	/**
+	 * B2: every cursor, in document order, primary included.
+	 *
+	 * The split into one primary plus secondaries is the reference's shape, and the reason
+	 * `getSelection()` keeps its meaning at all 52 call sites that already use it.
+	 */
+	getSelections(): Selection[] {
+		return [this._selection, ...this._secondary];
+	}
+
+	hasMultipleCursors(): boolean {
+		return this._secondary.length > 0;
+	}
+
 	setSelection(selection: Selection): void {
 		this._selection = this._clampSelection(selection);
+		// a plain selection change collapses to one cursor: clicking or moving with extra cursors
+		// still active would leave orphans behind that the user cannot see the origin of
+		this._secondary = [];
 		this._leftoverVisibleColumns = 0;
+		this._host.onDidChangeCursor();
+	}
+
+	/**
+	 * Replace the whole cursor set.
+	 *
+	 * Normalised on the way in, so cursors that have collided merge rather than doubling every
+	 * keystroke at that spot.
+	 */
+	setSelections(selections: readonly Selection[], primaryIndex: number = 0): void {
+		if (selections.length === 0) {
+			return;
+		}
+		const clamped = selections.map(selection => this._clampSelection(selection));
+		const normalized = normalizeCursors(clamped, primaryIndex);
+		this._selection = normalized.selections[normalized.primaryIndex];
+		this._secondary = normalized.selections.filter((_, index) => index !== normalized.primaryIndex);
+		this._leftoverVisibleColumns = 0;
+		this._host.onDidChangeCursor();
+	}
+
+	/** drop the extra cursors, keeping the primary — what Escape does */
+	collapseToPrimary(): void {
+		if (this._secondary.length === 0) {
+			return;
+		}
+		this._secondary = [];
 		this._host.onDidChangeCursor();
 	}
 
@@ -184,6 +232,12 @@ export class CursorController extends Disposable {
 		} else {
 			this._selection = Selection.fromPositions(position);
 		}
+		// moving the primary collapses the set. The reference moves every cursor independently,
+		// which needs the whole move computation per cursor; collapsing is the honest smaller
+		// behaviour and matches what Escape does.
+		// shortcut: arrow keys collapse to one cursor instead of moving all of them. Upgrade by
+		// running `moveCursor` per selection once the move helpers take a selection parameter.
+		this._secondary = [];
 		this._leftoverVisibleColumns = leftover;
 		this._host.onDidChangeCursor();
 	}

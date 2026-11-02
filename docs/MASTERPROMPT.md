@@ -124,14 +124,17 @@ editor's usefulness, and porting them would be cargo-culting.
     `editor.stickyScroll.maxLineCount` settings.
   - **Folding: moved to B5.** It needs the view-line mapping, which is the same prerequisite word
     wrap needs — see B5. Its range computation is already written and tested.
-  - Multi-cursor: not started. Does *not* need the mapping; it needs the cursor controller to hold
-    more than one selection.
+  - Multi-cursor: **done.** `insertCursorAbove`/`Below` (Ctrl+Alt+↑/↓),
+    `addSelectionToNextFindMatch` (Ctrl+D), `insertCursorAtEndOfEachLineSelected` (Shift+Alt+I),
+    `removeSecondaryCursors` (Escape). The controller keeps one primary plus secondaries, so
+    `getSelection()` still means the primary at all 52 call sites that already use it, and
+    typing is one edit per cursor in a single undo step.
   - **Outline + breadcrumbs: blocked, honestly.** The done-when is "symbols listed from the
     language provider" and there is no document-symbol provider: `languageFeatures` carries
     completion and hover only. It needs a new provider chain (extHost API, wire protocol,
     registry) before any UI is worth writing. An indentation-guessed outline would look like the
     feature without being it.
-  - 506 tests pass.
+  - 539 tests pass.
 
 ### Known deltas carried by B1
 
@@ -154,6 +157,12 @@ editor's usefulness, and porting them would be cargo-culting.
   want the same gutter work folding does.
 - Scope detection is indentation-based. The reference prefers a language-aware provider and falls
   back to indentation; we only have the fallback.
+- **Arrow keys collapse the cursor set** instead of moving every cursor (`shortcut:` in
+  `cursorController.ts`). The reference runs the whole move computation per cursor; that needs the
+  move helpers to take a selection parameter. Typing, Ctrl+D and the insert-cursor commands all
+  work on the full set — only motion is single-cursor.
+- Auto-closing pairs are skipped while several cursors are active: it is a single-cursor behaviour
+  in the reference too, and mixing them needs a per-cursor decision.
 
 ### Bugs found by driving the real app (not by the tests)
 

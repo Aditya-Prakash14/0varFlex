@@ -14,33 +14,34 @@ export class SelectionsLayer extends OverlayLayer {
 	}
 
 	protected override prepareRender(viewport: IViewport, context: IRenderContext): IOverlayRect[] {
-		const selection = context.selection;
-		if (selection.isEmpty()) {
-			return [];
-		}
-
 		const model = context.model;
 		const viewModel = context.viewModel;
 		const lineHeight = viewModel.getLineHeight();
-		const start = selection.getSelectionStart();
-		const end = selection.getSelectionEnd();
-
 		const rects: IOverlayRect[] = [];
-		const firstLine = Math.max(start.lineNumber, viewport.startLineNumber);
-		const lastLine = Math.min(end.lineNumber, viewport.endLineNumber);
 
-		for (let lineNumber = firstLine; lineNumber <= lastLine; lineNumber++) {
-			const lineText = model.getLineContent(lineNumber);
-			const columnStart = lineNumber === start.lineNumber ? start.column : 1;
-			const columnEnd = lineNumber === end.lineNumber ? end.column : lineText.length + 1;
-			const left = viewModel.getXForColumn(lineText, columnStart);
-			const width = viewModel.getXForColumn(lineText, columnEnd) - left;
-			rects.push({
-				top: viewModel.getLineTop(lineNumber),
-				left,
-				width,
-				height: lineHeight
-			});
+		// B2: every non-empty selection, each still one div per line
+		for (const selection of context.selections) {
+			if (selection.isEmpty()) {
+				continue;
+			}
+			const start = selection.getSelectionStart();
+			const end = selection.getSelectionEnd();
+			const firstLine = Math.max(start.lineNumber, viewport.startLineNumber);
+			const lastLine = Math.min(end.lineNumber, viewport.endLineNumber);
+
+			for (let lineNumber = firstLine; lineNumber <= lastLine; lineNumber++) {
+				const lineText = model.getLineContent(lineNumber);
+				const columnStart = lineNumber === start.lineNumber ? start.column : 1;
+				const columnEnd = lineNumber === end.lineNumber ? end.column : lineText.length + 1;
+				const left = viewModel.getXForColumn(lineText, columnStart);
+				const width = viewModel.getXForColumn(lineText, columnEnd) - left;
+				rects.push({
+					top: viewModel.getLineTop(lineNumber),
+					left,
+					width,
+					height: lineHeight
+				});
+			}
 		}
 		return rects;
 	}

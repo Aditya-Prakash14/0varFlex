@@ -23,6 +23,7 @@ import { registerSuggestCommands, suggestControllerFor } from './editor/contrib/
 import { bracketMatchingControllerFor, registerBracketMatchingCommands } from './editor/contrib/bracketMatching/bracketMatchingController.js';
 import { findControllerFor, registerFindCommands } from './editor/contrib/find/findController.js';
 import { gotoErrorControllerFor, registerGotoErrorCommands } from './editor/contrib/gotoError/gotoErrorController.js';
+import { registerMulticursorCommands, REMOVE_SECONDARY_CURSORS_ID } from './editor/contrib/multicursor/multicursor.js';
 import { stickyScrollControllerFor } from './editor/contrib/stickyScroll/stickyScrollController.js';
 import { registerLineOperationCommands } from './editor/contrib/linesOperations/linesOperations.js';
 import { TextEditorInput } from './workbench/common/editor/textEditorInput.js';
@@ -389,6 +390,17 @@ async function main(): Promise<void> {
 	});
 	registerBracketMatchingCommands(() => bracketMatchingControllerFor(getActiveWidget()));
 	registerGotoErrorCommands(() => gotoErrorControllerFor(getActiveWidget()));
+	// B2: extra cursors. Escape collapses them, bound above EditorCore so it beats nothing else
+	// here but still loses to the find widget, which registers at WorkbenchContrib weight.
+	registerMulticursorCommands(getActiveWidget);
+	CommandsRegistry.registerCommand(REMOVE_SECONDARY_CURSORS_ID, () => getActiveWidget()?.collapseToPrimaryCursor());
+	CommandMetadata.register({ id: REMOVE_SECONDARY_CURSORS_ID, title: 'Remove Secondary Cursors', category: 'Cursor' });
+	KeybindingsRegistry.registerKeybindingRule({
+		id: REMOVE_SECONDARY_CURSORS_ID,
+		weight: KeybindingWeight.EditorCore,
+		when: new RawContextKey<boolean>('editorTextFocus', false) as never,
+		primary: KeyCode.Escape
+	});
 	registerHoverCommands(() => hoverControllerFor(getActiveWidget()));
 	registerProblemsView({
 		markers: markerService,

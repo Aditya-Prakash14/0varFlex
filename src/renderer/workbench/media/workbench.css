@@ -2358,6 +2358,22 @@ body {
 	outline: 1px solid #f38518;
 }
 
+/* ---- bracket matching (B1): an outline, not a fill, so the character stays readable ---- */
+
+.editor-bracket-matches {
+	position: absolute;
+	inset: 0;
+	pointer-events: none;
+}
+
+.bracket-match {
+	position: absolute;
+	height: 1.35em;
+	border: 1px solid rgba(128, 128, 128, 0.7);
+	border-radius: 2px;
+	box-sizing: border-box;
+}
+
 /* ---- the Welcome page (the workbench's first non-text editor) ---- */
 
 .welcome-page {

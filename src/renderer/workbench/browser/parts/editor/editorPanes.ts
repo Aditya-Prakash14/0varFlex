@@ -8,10 +8,12 @@
 
 import { Disposable } from '../../../../../common/base/common/lifecycle.js';
 import { Position } from '../../../../../common/editor/common/core/position.js';
+import { languageConfigurationFor } from '../../../../../common/editor/common/languages/languageConfiguration.js';
 import { TextModel } from '../../../../../common/editor/common/model/textModel.js';
 import { append, $ } from '../../../../base/browser/dom.js';
 import { Selection } from '../../../../editor/browser/core/selection.js';
 import { EditorWidget, IEditorWidgetServices } from '../../../../editor/browser/editorWidget.js';
+import { BracketMatchingController, registerBracketMatchingController } from '../../../../editor/contrib/bracketMatching/bracketMatchingController.js';
 import { HoverController } from '../../../../editor/contrib/hover/hoverController.js';
 import { MarkerDecorations } from '../../../../editor/contrib/markerDecorations/markerDecorations.js';
 import { SuggestController } from '../../../../editor/contrib/suggest/suggestController.js';
@@ -50,6 +52,8 @@ export class TextEditorPane extends EditorPane {
 		this.element = $('.editor-pane');
 		this._widget = this._register(new EditorWidget(this.element, _services));
 		this._widget.setModel(model);
+		// B1: the file type decides comment tokens, bracket pairs and what typing `(` does
+		this._widget.setLanguageConfiguration(languageConfigurationFor(input.resource.fsPath));
 		// A2-1: honour the Readonly capability — it was declared but nothing enforced it, so a
 		// readonly input was still editable
 		this._widget.setReadonly(input.hasCapability(EditorInputCapabilities.Readonly));
@@ -62,6 +66,8 @@ export class TextEditorPane extends EditorPane {
 		// where the context key service is in scope; the widget wins Escape while it is open.
 		const find = this._register(new FindController(this._widget));
 		registerFindController(this._widget, find);
+		// B1: bracket highlight + Ctrl+Shift+\, resolved through the same per-widget lookup
+		registerBracketMatchingController(this._widget, this._register(new BracketMatchingController(this._widget)));
 		const findVisible = FindWidgetVisibleContext.bindTo(_services.contextKeyService);
 		this._register(find.onDidChangeVisibility(visible => findVisible.set(visible)));
 		// A2-2: gutter breakpoints, reusing 12's margin-layer mechanism

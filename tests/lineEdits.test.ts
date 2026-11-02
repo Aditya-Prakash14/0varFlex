@@ -5,8 +5,9 @@
 
 import * as assert from 'node:assert/strict';
 import { test } from 'node:test';
+import { commentTokensFor } from '../src/common/editor/common/languages/languageConfiguration.js';
 import {
-	commentTokensFor, copyLines, deleteLines, firstNonWhitespaceColumn, ILineEdit, ILineSource,
+	copyLines, deleteLines, firstNonWhitespaceColumn, ILineEdit, ILineSource,
 	indentLines, moveLinesDown, moveLinesUp, toggleBlockComment, toggleLineComment
 } from '../src/renderer/editor/contrib/linesOperations/lineEdits.js';
 

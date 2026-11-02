@@ -11,6 +11,8 @@ import { Emitter, Event } from '../../../common/base/common/event.js';
 import { Disposable, IDisposable, toDisposable } from '../../../common/base/common/lifecycle.js';
 import { Position } from '../../../common/editor/common/core/position.js';
 import { Range } from '../../../common/editor/common/core/range.js';
+import { ILanguageConfiguration, languageConfigurationFor } from '../../../common/editor/common/languages/languageConfiguration.js';
+import { autoClosingTypeResult } from '../../../common/editor/common/model/bracketMatching.js';
 import { TextModel } from '../../../common/editor/common/model/textModel.js';
 import { IConfigurationService } from '../../../common/platform/configuration/common/configuration.js';
 import { append, $ } from '../../base/browser/dom.js';
@@ -101,6 +103,9 @@ export class EditorWidget extends Disposable {
 	 * composition commits — the payoff of having a single edit path.
 	 */
 	private _readonly = false;
+
+	/** B1: what typing a bracket or quote does; replaced by the pane once it knows the file type */
+	private _languageConfiguration: ILanguageConfiguration = languageConfigurationFor('');
 
 	private readonly _onDidRender = this._register(new Emitter<IRenderInfo>());
 	readonly onDidRender: Event<IRenderInfo> = this._onDidRender.event;
@@ -230,11 +235,53 @@ export class EditorWidget extends Disposable {
 			model.pushStackElement();
 		}
 		const selection = this._cursorController.getSelection();
-		this._pushEdit(selection, text);
+
+		// B1: auto-closing pairs and the Enter rule. This lives in the type handler rather than in
+		// a contrib because that is where the reference puts it (cursorTypeOperations.ts) — it has
+		// to decide what gets inserted, which is too late to do from an edit event. Skipped for a
+		// non-empty selection (typing replaces it) and for composition commits.
+		const auto = !isCompositionCommit && selection.isEmpty()
+			? autoClosingTypeResult(text, {
+				source: model,
+				position: selection.getPosition(),
+				configuration: this._languageConfiguration,
+				indent: {
+					tabSize: this._editorOptions.tabSize,
+					insertSpaces: this._configuration.getValue<boolean>('editor.insertSpaces') ?? false
+				}
+			})
+			: null;
+
+		if (auto?.overtype) {
+			// the closer is already there: step over it rather than inserting a second one. No edit
+			// at all, so this cannot land on the undo stack as an empty step.
+			const position = selection.getPosition();
+			const column = position.column + 1;
+			this.setSelection(new Selection(position.lineNumber, column, position.lineNumber, column));
+		} else if (auto) {
+			this._pushEdit(selection, auto.text, auto.cursorOffset);
+		} else {
+			this._pushEdit(selection, text);
+		}
+
 		if (isCompositionCommit) {
 			model.pushStackElement();
 		}
 		this._onDidEdit.fire({ kind: 'type', text });
+	}
+
+	/**
+	 * The language configuration the type handler and the bracket contrib read.
+	 *
+	 * The pane sets this from its input's resource; a widget nobody told keeps the C-like default,
+	 * whose brackets and quotes are right for most files.
+	 */
+	setLanguageConfiguration(configuration: ILanguageConfiguration): void {
+		this._languageConfiguration = configuration;
+	}
+
+	getLanguageConfiguration(): ILanguageConfiguration {
+		return this._languageConfiguration;
 	}
 
 	/** 12: a completion accept replaces the provider's range and leaves the cursor after it */
@@ -368,7 +415,11 @@ export class EditorWidget extends Disposable {
 	 * post-edit cursor state from the inverse operations (07's contract), and adopt it —
 	 * undo/redo later restores it verbatim.
 	 */
-	private _pushEdit(range: Range, text: string): void {
+	/**
+	 * @param cursorOffset how far into `text` to leave the cursor; defaults to its end. Auto-closing
+	 * passes 1, so the cursor lands between the pair instead of after the closer.
+	 */
+	private _pushEdit(range: Range, text: string, cursorOffset: number = text.length): void {
 		const model = this._model;
 		if (!model || this._readonly) {
 			return; // A2: the one gate every mutation passes through
@@ -376,7 +427,7 @@ export class EditorWidget extends Disposable {
 		const before = this._cursorState();
 		const after = model.pushEditOperations(before, [{ range, text }], (inverseOperations) => {
 			const start = inverseOperations[0].range.getStartPosition();
-			const end = model.getPositionAt(model.getOffsetAt(start) + text.length);
+			const end = model.getPositionAt(model.getOffsetAt(start) + cursorOffset);
 			return { position: toPlainPosition(end), selectionStart: toPlainPosition(end) };
 		});
 		if (after) {

@@ -11,6 +11,8 @@
 // Nothing here touches the DOM or the widget, so the index arithmetic — which is where these
 // operations go wrong — is unit tested.
 
+import { ICommentTokens } from '../../../../common/editor/common/languages/languageConfiguration.js';
+
 export interface ILineEdit {
 	/** 1-based, end-exclusive in the column sense the model uses */
 	readonly startLineNumber: number;
@@ -201,48 +203,6 @@ export function indentLines(
 }
 
 // ---- comments
-
-export interface ICommentTokens {
-	readonly line?: string;
-	readonly blockStart?: string;
-	readonly blockEnd?: string;
-}
-
-const SLASH: ICommentTokens = { line: '//', blockStart: '/*', blockEnd: '*/' };
-const HASH: ICommentTokens = { line: '#' };
-
-/**
- * Comment tokens for a file, by extension.
- *
- * shortcut: a built-in table keyed on file extension, because this build has no
- * `language-configuration.json` — `contributes.languages` carries only id/aliases/extensions.
- * Upgrade to real language configuration when an extension needs to define its own comments.
- */
-export function commentTokensFor(path: string): ICommentTokens {
-	const match = /\.([A-Za-z0-9_]+)$/.exec(path);
-	const extension = match ? match[1].toLowerCase() : '';
-
-	switch (extension) {
-		case 'ts': case 'tsx': case 'js': case 'jsx': case 'mjs': case 'cjs':
-		case 'json': case 'jsonc': case 'c': case 'h': case 'cpp': case 'hpp':
-		case 'cs': case 'java': case 'go': case 'rs': case 'swift': case 'kt':
-		case 'php': case 'scala': case 'dart': case 'proto':
-			return SLASH;
-		case 'css': case 'scss': case 'less':
-			return { blockStart: '/*', blockEnd: '*/' };
-		case 'html': case 'xml': case 'svg': case 'vue': case 'md': case 'markdown':
-			return { blockStart: '<!--', blockEnd: '-->' };
-		case 'py': case 'sh': case 'bash': case 'zsh': case 'yml': case 'yaml':
-		case 'toml': case 'ini': case 'cfg': case 'conf': case 'rb': case 'pl':
-		case 'r': case 'gitignore': case 'dockerfile': case 'makefile':
-			return HASH;
-		case 'sql': case 'lua':
-			return { line: '--', blockStart: '--[[', blockEnd: ']]' };
-		default:
-			// an unknown file gets `//`, which is wrong less often than refusing to comment
-			return SLASH;
-	}
-}
 
 /** the column (1-based) of the first non-whitespace character, or the line length + 1 */
 export function firstNonWhitespaceColumn(line: string): number {

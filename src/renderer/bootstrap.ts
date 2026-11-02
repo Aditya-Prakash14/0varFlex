@@ -20,6 +20,7 @@ import { Selection } from './editor/browser/core/selection.js';
 import { registerEditorCommands } from './editor/browser/editorWidget.js';
 import { registerHoverCommands, hoverControllerFor } from './editor/contrib/hover/hoverController.js';
 import { registerSuggestCommands, suggestControllerFor } from './editor/contrib/suggest/suggestController.js';
+import { bracketMatchingControllerFor, registerBracketMatchingCommands } from './editor/contrib/bracketMatching/bracketMatchingController.js';
 import { findControllerFor, registerFindCommands } from './editor/contrib/find/findController.js';
 import { registerLineOperationCommands } from './editor/contrib/linesOperations/linesOperations.js';
 import { TextEditorInput } from './workbench/common/editor/textEditorInput.js';
@@ -374,13 +375,13 @@ async function main(): Promise<void> {
 	// B1: whole-line editing and comment toggling. Stateless, so it takes the lookups, not a controller.
 	registerLineOperationCommands({
 		getActiveWidget,
-		getActivePath: () => workbench.layout.editor.activeGroup.activeEditor?.getResource()?.fsPath ?? null,
 		getIndentOptions: () => ({
 			tabSize: configurationService.getValue<number>('editor.tabSize') ?? 4,
 			// matches the `tab` command, which inserts a real tab; there is no editor.insertSpaces yet
 			insertSpaces: configurationService.getValue<boolean>('editor.insertSpaces') ?? false
 		})
 	});
+	registerBracketMatchingCommands(() => bracketMatchingControllerFor(getActiveWidget()));
 	registerHoverCommands(() => hoverControllerFor(getActiveWidget()));
 	registerProblemsView({
 		markers: markerService,

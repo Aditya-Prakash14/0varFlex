@@ -14,7 +14,7 @@ import { KeybindingsRegistry, KeybindingWeight } from '../../../platform/keybind
 import { Selection } from '../../browser/core/selection.js';
 import { EditorWidget } from '../../browser/editorWidget.js';
 import {
-	commentTokensFor, copyLines, deleteLines, ILineEdit, indentLines, moveLinesDown, moveLinesUp,
+	copyLines, deleteLines, ILineEdit, indentLines, moveLinesDown, moveLinesUp,
 	toggleBlockComment, toggleLineComment
 } from './lineEdits.js';
 
@@ -33,8 +33,6 @@ export const LINE_OPERATION_IDS = {
 
 export interface ILineOperationsContext {
 	getActiveWidget(): EditorWidget | null;
-	/** the active editor's path, for choosing comment tokens; null when it has no file */
-	getActivePath(): string | null;
 	/** indentation settings; the reference reads these from the model's options */
 	getIndentOptions(): { tabSize: number; insertSpaces: boolean };
 }
@@ -151,7 +149,7 @@ export function registerLineOperationCommands(context: ILineOperationsContext): 
 
 	register(LINE_OPERATION_IDS.CommentLine, 'Toggle Line Comment',
 		onLines((widget, start, end) => {
-			const tokens = commentTokensFor(context.getActivePath() ?? '');
+			const tokens = widget.getLanguageConfiguration().comments;
 			// a language with no line comment (CSS, HTML) falls back to its block comment, which
 			// is what Ctrl+/ does in the reference
 			return toggleLineComment(widget.getModel()!, start, end, tokens)
@@ -161,7 +159,7 @@ export function registerLineOperationCommands(context: ILineOperationsContext): 
 
 	register(LINE_OPERATION_IDS.BlockComment, 'Toggle Block Comment',
 		onLines((widget, start, end) =>
-			toggleBlockComment(widget.getModel()!, start, end, commentTokensFor(context.getActivePath() ?? ''))),
+			toggleBlockComment(widget.getModel()!, start, end, widget.getLanguageConfiguration().comments)),
 		{ primary: KeyMod.Shift | KeyMod.Alt | KeyCode.KeyA });
 
 	return toDisposable(() => disposables.forEach(disposable => disposable.dispose()));

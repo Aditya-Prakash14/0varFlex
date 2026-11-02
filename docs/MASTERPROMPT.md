@@ -95,17 +95,30 @@ editor's usefulness, and porting them would be cargo-culting.
 
 ## Status
 
-- **B1** — in progress.
-  - Comment toggle and line operations: **done**. 9 real command ids in
-    `editor/contrib/linesOperations/`, the edit computation in `lineEdits.ts` under 32 tests, and
-    all ten "done when" behaviours driven through the real commands in the running app.
-  - Bracket matching and auto-closing pairs: next.
-- B2–B5 — queued, in the order above.
+- **B1 — done.** All four items.
+  - Comment toggle and line operations: 9 real command ids in `editor/contrib/linesOperations/`,
+    the edit computation in `lineEdits.ts`, and all ten "done when" behaviours driven through the
+    real commands in the running app.
+  - Bracket matching: `editor.action.jumpToBracket` (Ctrl+Shift+\\) plus a highlight content
+    layer in `editor/contrib/bracketMatching/`, over a nesting-aware scan in
+    `common/editor/common/model/bracketMatching.ts`.
+  - Auto-closing pairs and auto-indent: in the widget's type handler, which is where the
+    reference puts them (`cursorTypeOperations.ts`) — a contrib reacting to an edit event is too
+    late to change what gets inserted.
+  - Language configuration now has one home,
+    `common/editor/common/languages/languageConfiguration.ts`: comment tokens, bracket pairs and
+    auto-closing pairs. The pane sets it on the widget from the input's resource.
+  - 459 tests pass; 63 of them cover B1's pure logic.
+- B2 — next, in the order above.
 
 ### Known deltas carried by B1
 
-- Comment tokens come from a built-in extension table, not `language-configuration.json`
-  (`shortcut:` in `lineEdits.ts`). An extension cannot define its own comment tokens yet.
-- `editor.action.blockComment` works on whole lines, not the exact selection.
-- There is no `editor.insertSpaces` setting, so indent/outdent insert a tab, matching the existing
+- One built-in table keyed on file extension, not `language-configuration.json` (`shortcut:` in
+  `languageConfiguration.ts`). An extension cannot bring or override a language's syntax yet.
+- **Bracket matching is text-only.** There is no tokenizer, so a bracket inside a string or a
+  comment counts as a bracket. The same gap is why auto-closing uses `autoCloseBefore` rather than
+  the reference's `notIn: ['string', 'comment']` rules. Closed by B5's semantic tokens.
+- `editor.action.blockComment` works on whole lines, not the exact selection; there is no
+  "surround the selection with a pair" either.
+- There is no `editor.insertSpaces` setting, so indentation inserts a tab, matching the existing
   `tab` command.

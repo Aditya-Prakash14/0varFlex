@@ -614,6 +614,10 @@ async function main(): Promise<void> {
 			workbench.layout.sidebar.showComposite('outline');
 		}
 	});
+	// registerComposite only toggles `display`; it does not attach. Every other view is handed
+	// `sidebarContainer` by its constructor — the outline builds its own element, so it is
+	// appended here or it never reaches the DOM at all.
+	sidebarContainer.appendChild(outlineView.element);
 	workbench.layout.sidebar.registerComposite({
 		id: 'outline',
 		element: outlineView.element,

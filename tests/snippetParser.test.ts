@@ -50,18 +50,41 @@ test('no tab stops at all is visible to the caller', () => {
 	assert.equal(hasTabStops(parseSnippet('$0')), true);
 });
 
-test('unsupported constructs survive verbatim', () => {
-	for (const template of ['$TM_FILENAME', '${TM_FILENAME}', '${1|a,b|}', '${1/.*/${1:/upcase}/}', '${1:${2:nested}}', '${1:unterminated', '100% $ off']) {
+// These two tests used to assert the LIMITATIONS of a hand-written parser: that choices,
+// variables, transforms and nesting all survived as literal text because none of them were
+// supported. The parser is now VS Code's own (see src/vendor/vscode/README.md), so they assert
+// the real behaviour instead. Keeping them pointed at the same templates is deliberate — it is
+// the record of what vendoring actually bought.
+
+test('choices resolve to their first option, and nesting yields both stops', () => {
+	// `${1|a,b|}` — a choice the old parser left as literal text
+	const choice = parseSnippet('${1|a,b|}');
+	assert.equal(choice.text, 'a');
+	assert.deepEqual(choice.tabStops.map(stop => stop.index), [1]);
+
+	// `${1:${2:nested}}` — a nested placeholder, which the old parser could not see into
+	const nested = parseSnippet('${1:${2:nested}}');
+	assert.equal(nested.text, 'nested');
+	assert.deepEqual(nested.tabStops.map(stop => stop.index), [1, 2]);
+});
+
+test('genuinely malformed templates are still left alone', () => {
+	for (const template of ['${1:unterminated', '100% $ off']) {
 		const result = parseSnippet(template);
 		assert.equal(result.text, template, template);
 		assert.equal(result.tabStops.length, 0, template);
 	}
 });
 
-test('a tab stop next to an unsupported variable still parses', () => {
-	const result = parseSnippet('// $TM_FILENAME\n${1:body}');
-	assert.equal(result.text, '// $TM_FILENAME\nbody');
-	assert.deepEqual(result.tabStops[0].occurrences, [{ offset: 16, length: 4 }]);
+test('an unresolved variable renders empty — the documented cost of vendoring', () => {
+	// No variable resolver is wired up yet, so a variable has no value and contributes no text.
+	// This is the one way the vendored parser is WORSE than the hand-written one, which left
+	// `$TM_FILENAME` as literal text. It is pinned here so the day a resolver lands, this test
+	// fails and tells whoever wrote it to update the `shortcut:` note in snippetParser.ts.
+	assert.equal(parseSnippet('$TM_FILENAME').text, '');
+	const withStop = parseSnippet('// $TM_FILENAME\n${1:body}');
+	assert.equal(withStop.text, '// \nbody');
+	assert.deepEqual(withStop.tabStops[0].occurrences, [{ offset: 4, length: 4 }]);
 });
 
 test('offsets become model positions relative to the insert point', () => {

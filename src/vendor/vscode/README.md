@@ -47,4 +47,22 @@ So the rule is **closure, not preference**:
 | Vendored file | Upstream path | Taken because |
 |---|---|---|
 | `editor/contrib/snippet/snippetParser.ts` | `src/vs/editor/contrib/snippet/browser/snippetParser.ts` | Full snippet syntax — placeholders, choices, variables, transforms, format strings. The hand-written replacement it replaced was 234 lines and carried three `shortcut:` comments admitting it supported none of those. |
-| `base/common/charCode.ts` | `src/vs/base/common/charCode.ts` | The only dependency of the above. |
+| `base/common/charCode.ts` | `src/vs/base/common/charCode.ts` | Dependency of the snippet parser and of `color.ts`. |
+| `base/common/path.ts` | `src/vs/base/common/path.ts` | node:path, ported upstream to run in a browser bundle. Replaced FIVE divergent hand-rolled `basename`/`dirname` helpers, two of which split on `/` only and so were broken on Windows. |
+| `base/common/process.ts`, `base/common/platform.ts`, `nls.ts` | same paths under `src/vs/` | Dependencies of `path.ts`. |
+| `base/common/color.ts` | `src/vs/base/common/color.ts` | RGBA/HSLA/HSVA conversion and hex parsing, for the theme registry. |
+| `base/common/json.ts`, `base/common/jsonFormatter.ts` | same paths under `src/vs/` | A real JSON scanner and formatter, for the settings editor. |
+
+## Evaluated and REJECTED
+
+Recording these matters as much as recording what was taken — otherwise the next person
+re-measures the same files.
+
+| Candidate | Why not |
+|---|---|
+| `base/common/diff/diff.ts` | My scan said ~10 files, but the real closure keeps growing: `hash.ts` pulls `buffer.ts`, which pulls `stream.ts` and `lazy.ts`, and several of those fail this project's stricter `noImplicitAny`. Vendoring it would mean importing stream handling for one `stringHash` call and fighting type errors in files nobody wanted. The diff editor gets a hand-written line diff instead. |
+| `editor/common/diff/.../defaultLinesDiffComputer.ts` | 96 files, 31,450 lines, and depends on their `observable` library. |
+
+The lesson from the first of those: **a closure estimate is a hypothesis.** Copy the files, run
+`npx tsc --noEmit -p .`, and let the compiler decide. If the chain keeps growing or the errors
+land in files you did not set out to take, that is the signal to port by hand instead.

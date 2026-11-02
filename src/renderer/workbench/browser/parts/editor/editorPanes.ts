@@ -14,6 +14,7 @@ import { append, $ } from '../../../../base/browser/dom.js';
 import { Selection } from '../../../../editor/browser/core/selection.js';
 import { EditorWidget, IEditorWidgetServices } from '../../../../editor/browser/editorWidget.js';
 import { BracketMatchingController, registerBracketMatchingController } from '../../../../editor/contrib/bracketMatching/bracketMatchingController.js';
+import { FoldingController, registerFoldingController } from '../../../../editor/contrib/folding/foldingController.js';
 import { GotoErrorController, registerGotoErrorController } from '../../../../editor/contrib/gotoError/gotoErrorController.js';
 import { HoverController } from '../../../../editor/contrib/hover/hoverController.js';
 import { registerStickyScrollController, StickyScrollController } from '../../../../editor/contrib/stickyScroll/stickyScrollController.js';
@@ -76,6 +77,8 @@ export class TextEditorPane extends EditorPane {
 		// B2: the enclosing scopes pinned at the top while scrolling
 		registerStickyScrollController(this._widget, this._register(
 			new StickyScrollController(this._widget, _services.configuration)));
+		// B2: folding, on the view-line mapping the word wrap work will share
+		registerFoldingController(this._widget, this._register(new FoldingController(this._widget)));
 		const findVisible = FindWidgetVisibleContext.bindTo(_services.contextKeyService);
 		this._register(find.onDidChangeVisibility(visible => findVisible.set(visible)));
 		// A2-2: gutter breakpoints, reusing 12's margin-layer mechanism

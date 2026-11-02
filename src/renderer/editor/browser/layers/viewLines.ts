@@ -165,13 +165,15 @@ export class ViewLinesLayer implements IViewLayer {
 		let maxCells = 0;
 		let slot = 0;
 
-		for (let lineNumber = viewport.startLineNumber; lineNumber <= viewport.endLineNumber; lineNumber++, slot++) {
-			let node = this._nodes[slot];
+		// a folded line has no row, so the pool walks the VISIBLE model lines rather than a range
+		for (const lineNumber of viewModel.visibleModelLines(viewport)) {
+			const index = slot++;
+			let node = this._nodes[index];
 			if (!node) {
 				const element = $('.view-line');
 				const data: ILineInfo = { lineNumber: -1, columns: [] };
 				node = { element, lineNumber: -1, version: -1, epoch: -1, renderedCells: 0, data };
-				this._nodes[slot] = node;
+				this._nodes[index] = node;
 				this._lineInfo.set(element, data);
 				append(this.element, element);
 			}

@@ -63,7 +63,8 @@ export class MarkerDecorations extends Disposable {
 
 	private _squiggleRects(viewport: IViewport, context: IRenderContext): IMarkerRect[] {
 		const rects: IMarkerRect[] = [];
-		for (let lineNumber = viewport.startLineNumber; lineNumber <= viewport.endLineNumber; lineNumber++) {
+		// visibleModelLines, not a range: a marker on a folded line has no row to draw on
+		for (const lineNumber of context.viewModel.visibleModelLines(viewport)) {
 			for (const marker of this._markersForLine(lineNumber)) {
 				const lineText = context.model.getLineContent(lineNumber);
 				const startColumn = lineNumber === marker.range.startLineNumber ? marker.range.startColumn : 1;
@@ -83,7 +84,8 @@ export class MarkerDecorations extends Disposable {
 
 	private _dotRects(viewport: IViewport, context: IRenderContext): IMarkerRect[] {
 		const rects: IMarkerRect[] = [];
-		for (let lineNumber = viewport.startLineNumber; lineNumber <= viewport.endLineNumber; lineNumber++) {
+		// visibleModelLines, not a range: a marker on a folded line has no row to draw on
+		for (const lineNumber of context.viewModel.visibleModelLines(viewport)) {
 			const markers = this._markersForLine(lineNumber);
 			if (markers.length === 0) {
 				continue;

@@ -58,11 +58,13 @@ export class LineNumbersLayer implements IViewLayer {
 		// numbers are viewport-space: the margin does not scroll with the content
 		const scrollTop = context.scrollTop;
 		let slot = 0;
-		for (let lineNumber = viewport.startLineNumber; lineNumber <= viewport.endLineNumber; lineNumber++, slot++) {
-			let node = this._nodes[slot];
+		// a folded line has no row, so it has no number either
+		for (const lineNumber of context.viewModel.visibleModelLines(viewport)) {
+			const index = slot++;
+			let node = this._nodes[index];
 			if (!node) {
 				node = { element: $('.line-number'), lineNumber: -1, text: '', current: false };
-				this._nodes[slot] = node;
+				this._nodes[index] = node;
 				append(this.element, node.element);
 			}
 

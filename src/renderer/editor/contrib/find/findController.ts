@@ -380,7 +380,9 @@ export class FindController extends Disposable {
 		for (let i = 0; i < this._matches.length && rects.length < MAX_HIGHLIGHTS; i++) {
 			const range = this._matches[i].range;
 			// only what is on screen
-			if (range.startLineNumber < viewport.startLineNumber || range.startLineNumber > viewport.endLineNumber) {
+			// offscreen, or inside a collapsed region — either way there is no row for it
+			if (range.startLineNumber < viewport.startLineNumber || range.startLineNumber > viewport.endLineNumber
+				|| context.viewModel.isLineHidden(range.startLineNumber)) {
 				continue;
 			}
 			const lineText = context.model.getLineContent(range.startLineNumber);

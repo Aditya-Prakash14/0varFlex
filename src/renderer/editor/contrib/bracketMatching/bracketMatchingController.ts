@@ -109,7 +109,9 @@ export class BracketMatchingController extends Disposable {
 
 		const rects: IBracketRect[] = [];
 		for (const range of [this._matched.bracket, this._matched.partner]) {
-			if (range.startLineNumber < viewport.startLineNumber || range.startLineNumber > viewport.endLineNumber) {
+			// offscreen, or inside a collapsed region — either way there is no row for it
+			if (range.startLineNumber < viewport.startLineNumber || range.startLineNumber > viewport.endLineNumber
+				|| context.viewModel.isLineHidden(range.startLineNumber)) {
 				continue; // offscreen
 			}
 			rects.push(this._rectFor(range, context));

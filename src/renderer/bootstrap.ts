@@ -22,6 +22,7 @@ import { registerHoverCommands, hoverControllerFor } from './editor/contrib/hove
 import { registerSuggestCommands, suggestControllerFor } from './editor/contrib/suggest/suggestController.js';
 import { bracketMatchingControllerFor, registerBracketMatchingCommands } from './editor/contrib/bracketMatching/bracketMatchingController.js';
 import { findControllerFor, registerFindCommands } from './editor/contrib/find/findController.js';
+import { foldingControllerFor, registerFoldingCommands } from './editor/contrib/folding/foldingController.js';
 import { gotoErrorControllerFor, registerGotoErrorCommands } from './editor/contrib/gotoError/gotoErrorController.js';
 import { registerMulticursorCommands, REMOVE_SECONDARY_CURSORS_ID } from './editor/contrib/multicursor/multicursor.js';
 import { stickyScrollControllerFor } from './editor/contrib/stickyScroll/stickyScrollController.js';
@@ -393,6 +394,7 @@ async function main(): Promise<void> {
 	// B2: extra cursors. Escape collapses them, bound above EditorCore so it beats nothing else
 	// here but still loses to the find widget, which registers at WorkbenchContrib weight.
 	registerMulticursorCommands(getActiveWidget);
+	registerFoldingCommands(() => foldingControllerFor(getActiveWidget()));
 	CommandsRegistry.registerCommand(REMOVE_SECONDARY_CURSORS_ID, () => getActiveWidget()?.collapseToPrimaryCursor());
 	CommandMetadata.register({ id: REMOVE_SECONDARY_CURSORS_ID, title: 'Remove Secondary Cursors', category: 'Cursor' });
 	KeybindingsRegistry.registerKeybindingRule({
@@ -1044,7 +1046,10 @@ async function main(): Promise<void> {
 			}
 		},
 		/** B2: the model lines sticky scroll currently has pinned */
-		getPinnedLines: () => stickyScrollControllerFor(getActiveWidget())?.getPinnedLines() ?? []
+		getPinnedLines: () => stickyScrollControllerFor(getActiveWidget())?.getPinnedLines() ?? [],
+		/** B2: the header lines of the collapsed regions, and the view-line count they produce */
+		getCollapsedLines: () => foldingControllerFor(getActiveWidget())?.getCollapsedLines() ?? [],
+		getViewLineCount: () => getActiveWidget()?.getViewModel().getLineMapping().viewLineCount ?? 0
 	};
 
 	const devEditors = {

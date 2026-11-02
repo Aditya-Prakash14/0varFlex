@@ -79,15 +79,18 @@ The things whose absence makes an editor feel unfinished within a minute.
 
 ## B5 — Engines (deliberately last: large, and nothing above depends on them)
 
-- **The view-line mapping** — *this document originally had word wrap here and folding in B2, as
-  if they were independent. They are not: both need the same thing first.* Today
-  `viewModel.getLineTop(n)` is `(n - 1) × lineHeight` and 16 call sites across 13 files assume it.
-  Hiding lines (folding) and splitting lines (wrap) both break that assumption, so the model-line
-  ↔ view-line mapping is one prerequisite serving both. Do it once, then folding and wrap are
-  each small. Start at `editor/common/viewModel`.
-- **Folding** — `editor/contrib/folding`, on top of the mapping above. The range computation is
-  already done and tested (`common/editor/common/model/indentRanges.ts`, shared with sticky
-  scroll), so what remains is the gutter chevrons and the hidden-line plumbing.
+- **Word wrap** — *this document originally had word wrap here and folding in B2, as if they were
+  independent. They are not: both need the model-line ↔ view-line mapping, which is why folding
+  came with it.* Half of that prerequisite now exists:
+  `common/editor/common/viewModel/lineMapping.ts` hides lines, and the geometry consults it.
+  Wrap needs the other half — one model line becoming SEVERAL view lines, so `modelToView`
+  returns a range rather than a number, and the x ↔ column maths becomes per-view-line. The
+  interface is shaped for it. Expect it still to break pixel assumptions, but no longer the
+  model-to-row ones.
+  - The approach that kept folding from being a rewrite: call sites still pass MODEL line
+    numbers and the view model maps them, rather than converting all 16 geometry sites to view
+    coordinates. Layers that loop a range call `visibleModelLines(viewport)` so they cannot
+    forget to skip a folded line.
 - **Piece-tree buffer** — `editor/common/model/pieceTreeTextBuffer`. The documented answer to the
   "what breaks at 10×" question; only worth it once large files are actually opened.
 - **Minimap**, **semantic tokens**, **notebooks**, **webviews**, **testing**, **remote/SSH**,
@@ -122,8 +125,10 @@ editor's usefulness, and porting them would be cargo-culting.
   - Sticky scroll: **done.** `editor/contrib/stickyScroll/` over
     `common/editor/common/model/indentRanges.ts`, with the real `editor.stickyScroll.enabled` and
     `editor.stickyScroll.maxLineCount` settings.
-  - **Folding: moved to B5.** It needs the view-line mapping, which is the same prerequisite word
-    wrap needs — see B5. Its range computation is already written and tested.
+  - Folding: **done**, and with it the view-line mapping it needed. `editor.fold`/`unfold`
+    (Ctrl+Shift+[/]), `foldAll`/`unfoldAll` (Ctrl+K Ctrl+0 / Ctrl+K Ctrl+J), `toggleFold`, plus
+    gutter chevrons. See the B5 note: the mapping is the half of the word-wrap prerequisite that
+    is now built.
   - Multi-cursor: **done.** `insertCursorAbove`/`Below` (Ctrl+Alt+↑/↓),
     `addSelectionToNextFindMatch` (Ctrl+D), `insertCursorAtEndOfEachLineSelected` (Shift+Alt+I),
     `removeSecondaryCursors` (Escape). The controller keeps one primary plus secondaries, so
@@ -134,7 +139,7 @@ editor's usefulness, and porting them would be cargo-culting.
     completion and hover only. It needs a new provider chain (extHost API, wire protocol,
     registry) before any UI is worth writing. An indentation-guessed outline would look like the
     feature without being it.
-  - 539 tests pass.
+  - 561 tests pass.
 
 ### Known deltas carried by B1
 
@@ -163,6 +168,12 @@ editor's usefulness, and porting them would be cargo-culting.
   work on the full set — only motion is single-cursor.
 - Auto-closing pairs are skipped while several cursors are active: it is a single-cursor behaviour
   in the reference too, and mixing them needs a per-cursor decision.
+- **Collapsed regions are remembered by header line number** (`shortcut:` in
+  `foldingController.ts`), so an edit *above* a fold shifts what is collapsed. The reference
+  tracks them with decorations that move with the text. The fix is a decoration id per region.
+- Folding is indentation-based, so a region ends at its last deeper line and the closing brace
+  stays visible. That matches the reference's indentation provider; a language-aware provider
+  would fold the brace too.
 
 ### Bugs found by driving the real app (not by the tests)
 

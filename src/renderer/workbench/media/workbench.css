@@ -2358,6 +2358,40 @@ body {
 	outline: 1px solid #f38518;
 }
 
+/* ---- folding (B2): gutter chevrons, in the margin beside the line numbers ---- */
+
+.editor-folding-gutter {
+	position: absolute;
+	top: 0;
+	left: 0;
+	width: 16px;
+}
+
+.folding-chevron {
+	position: absolute;
+	left: 2px;
+	width: 12px;
+	height: 1.35em;
+	line-height: 1.35em;
+	text-align: center;
+	font-size: 11px;
+	color: #808080;
+	cursor: pointer;
+	user-select: none;
+	/* only shown on hover unless collapsed, so the gutter is not a wall of arrows */
+	opacity: 0;
+	transition: opacity 80ms linear;
+}
+
+.editor-margin:hover .folding-chevron,
+.folding-chevron.collapsed {
+	opacity: 1;
+}
+
+.folding-chevron:hover {
+	color: #e7e7e7;
+}
+
 /* ---- sticky scroll (B2): the enclosing scopes, pinned over the content ---- */
 
 .editor-sticky-scroll {

@@ -127,7 +127,8 @@ export class BreakpointDecorations extends Disposable {
 		}
 
 		const rects: IDotRect[] = [];
-		for (let lineNumber = viewport.startLineNumber; lineNumber <= viewport.endLineNumber; lineNumber++) {
+		// visibleModelLines, not a range: a marker on a folded line has no row to draw on
+		for (const lineNumber of context.viewModel.visibleModelLines(viewport)) {
 			if (!lines.has(lineNumber)) {
 				continue;
 			}

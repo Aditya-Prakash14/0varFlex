@@ -2,6 +2,7 @@
 // expanded for measurement, visible range from scroll. All pure and unit-testable.
 
 import { Position } from '../../../common/editor/common/core/position.js';
+import { IHiddenRange, LineMapping } from '../../../common/editor/common/viewModel/lineMapping.js';
 
 export interface IViewport {
 	readonly startLineNumber: number;
@@ -43,12 +44,14 @@ export class ViewModel {
 	private _charWidth: number;
 	private _tabSize: number;
 	private _lineCount: number;
+	private readonly _mapping: LineMapping;
 
 	constructor(options: IViewModelOptions) {
 		this._lineHeight = options.lineHeight;
 		this._charWidth = options.charWidth;
 		this._tabSize = options.tabSize;
 		this._lineCount = options.lineCount;
+		this._mapping = new LineMapping(options.lineCount);
 	}
 
 	update(options: Partial<IViewModelOptions>): void {
@@ -63,6 +66,8 @@ export class ViewModel {
 		}
 		if (options.lineCount !== undefined) {
 			this._lineCount = options.lineCount;
+			// an edit can leave a collapsed region pointing past the end of the document
+			this._mapping.setModelLineCount(options.lineCount);
 		}
 	}
 
@@ -71,19 +76,58 @@ export class ViewModel {
 	getTabSize(): number { return this._tabSize; }
 	getLineCount(): number { return this._lineCount; }
 
+	/**
+	 * The line map. Callers still speak MODEL line numbers everywhere — that is deliberate, it is
+	 * what kept folding from becoming a rewrite of all 16 geometry call sites — and the geometry
+	 * below consults the map instead of assuming one line per row.
+	 */
+	getLineMapping(): LineMapping {
+		return this._mapping;
+	}
+
+	setHiddenRanges(ranges: readonly IHiddenRange[]): void {
+		this._mapping.setHiddenRanges(ranges);
+	}
+
+	/** true when this model line is inside a collapsed region, so nothing should be drawn for it */
+	isLineHidden(lineNumber: number): boolean {
+		return this._mapping.isHidden(lineNumber);
+	}
+
+	/** the pixel top of a MODEL line; a hidden line reports its fold header's row */
 	getLineTop(lineNumber: number): number {
-		return (lineNumber - 1) * this._lineHeight;
+		return (this._mapping.modelToView(lineNumber) - 1) * this._lineHeight;
 	}
 
 	getTotalHeight(): number {
-		return this._lineCount * this._lineHeight;
+		return this._mapping.viewLineCount * this._lineHeight;
 	}
 
-	/** the rendered range to draw: the visible lines plus `overscan` lines on each side */
+	/**
+	 * The MODEL lines to draw, as a range, plus `overscan` rows on each side.
+	 *
+	 * Still a range of model line numbers so existing layers keep working, but derived from view
+	 * rows — the gap between start and end widens by every folded line in between. Layers that
+	 * loop it must skip hidden lines; `visibleModelLines` does that for them.
+	 */
 	getViewport(scrollTop: number, viewportHeight: number, overscan: number = 1): IViewport {
-		const startLineNumber = Math.max(1, Math.floor(scrollTop / this._lineHeight) + 1 - overscan);
-		const endLineNumber = Math.min(this._lineCount, Math.ceil((scrollTop + viewportHeight) / this._lineHeight) + overscan);
-		return { startLineNumber, endLineNumber };
+		const startViewLine = Math.max(1, Math.floor(scrollTop / this._lineHeight) + 1 - overscan);
+		const endViewLine = Math.min(
+			this._mapping.viewLineCount,
+			Math.ceil((scrollTop + viewportHeight) / this._lineHeight) + overscan
+		);
+		return {
+			startLineNumber: this._mapping.viewToModel(startViewLine),
+			endLineNumber: this._mapping.viewToModel(endViewLine)
+		};
+	}
+
+	/** the model lines actually drawn in a viewport, folded ones left out */
+	visibleModelLines(viewport: IViewport): number[] {
+		return this._mapping.modelLinesForViewRange(
+			this._mapping.modelToView(viewport.startLineNumber),
+			this._mapping.modelToView(viewport.endLineNumber)
+		);
 	}
 
 	/** x pixel (0 = line start) → 1-based model column, tab-aware, nearest boundary */
@@ -124,7 +168,13 @@ export class ViewModel {
 
 	/** offset inside the viewport → position (the mouse math, cheap path) */
 	getViewPositionFromCoordinates(scrollTop: number, x: number, y: number, getLineText: (lineNumber: number) => string): Position {
-		const lineNumber = Math.max(1, Math.min(this._lineCount, Math.floor((scrollTop + y) / this._lineHeight) + 1));
+		// the row under the pointer is a VIEW row; with a region collapsed the model line there is
+		// further down the document. Clicking below a fold otherwise lands on the wrong line.
+		const viewLineNumber = Math.max(1, Math.min(
+			this._mapping.viewLineCount,
+			Math.floor((scrollTop + y) / this._lineHeight) + 1
+		));
+		const lineNumber = this._mapping.viewToModel(viewLineNumber);
 		const column = this.getColumnForX(getLineText(lineNumber), x);
 		return new Position(lineNumber, column);
 	}

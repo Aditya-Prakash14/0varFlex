@@ -42,6 +42,15 @@ import type { IWireCompletionList, IWireHover, IWireRange } from '../common/plat
 export interface IMainThreadLanguageFeatures {
 	$registerCompletionProvider(handle: number, language: string, triggerCharacters?: readonly string[]): Promise<void>;
 	$registerHoverProvider(handle: number, language: string): Promise<void>;
+	// B2: the five further kinds. Method names are the reference's (several read `…Support`, not
+	// `…Provider`, which is why they look inconsistent here too).
+	$registerDocumentSymbolProvider(handle: number, language: string, label: string): Promise<void>;
+	$registerDefinitionSupport(handle: number, language: string): Promise<void>;
+	/** `supportsResolveInitialValues` = the provider has prepareRename, so the editor may ask first */
+	$registerRenameSupport(handle: number, language: string, supportsResolveInitialValues: boolean): Promise<void>;
+	/** metadata.providedCodeActionKinds lets the editor skip providers that cannot serve `only` */
+	$registerCodeActionSupport(handle: number, language: string, metadata: { readonly providedCodeActionKinds?: readonly string[] }, displayName: string): Promise<void>;
+	$registerDocumentFormattingSupport(handle: number, language: string, displayName: string): Promise<void>;
 	$unregisterProvider(handle: number): Promise<void>;
 	/** the diagnostics push: owner = the collection name; empty entries clear everything */
 	$changeDiagnostics(owner: string, entries: readonly { uri: { scheme: string; path: string }; markers: readonly { range: IWireRange; severity: number; message: string; code?: string }[] }[]): Promise<void>;

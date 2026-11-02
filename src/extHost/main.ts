@@ -190,6 +190,22 @@ function runHost(port: Electron.MessagePortMain): void {
 			extHostLanguageFeatures.$provideCompletionItems(handle, requestId, uri, position, context),
 		$provideHover: (handle: number, requestId: number, uri: { scheme: string; path: string }, position: { line: number; character: number }) =>
 			extHostLanguageFeatures.$provideHover(handle, requestId, uri, position),
+		// B3: the channel is an explicit allowlist, not a pass-through — ProxyChannel dispatches by
+		// looking the command up on THIS object, so a $provideX that exists on the class but is
+		// missing here fails with "Unknown channel command", and the adapter's catch turns that
+		// into a silent null. Every new provider kind needs a line here.
+		$provideDocumentSymbols: (handle: number, requestId: number, uri: { scheme: string; path: string }) =>
+			extHostLanguageFeatures.$provideDocumentSymbols(handle, requestId, uri),
+		$provideDefinition: (handle: number, requestId: number, uri: { scheme: string; path: string }, position: { line: number; character: number }) =>
+			extHostLanguageFeatures.$provideDefinition(handle, requestId, uri, position),
+		$provideRenameEdits: (handle: number, requestId: number, uri: { scheme: string; path: string }, position: { line: number; character: number }, newName: string) =>
+			extHostLanguageFeatures.$provideRenameEdits(handle, requestId, uri, position, newName),
+		$resolveRenameLocation: (handle: number, requestId: number, uri: { scheme: string; path: string }, position: { line: number; character: number }) =>
+			extHostLanguageFeatures.$resolveRenameLocation(handle, requestId, uri, position),
+		$provideCodeActions: (handle: number, requestId: number, uri: { scheme: string; path: string }, range: { start: { line: number; character: number }; end: { line: number; character: number } }, context: { trigger: number; only?: string }) =>
+			extHostLanguageFeatures.$provideCodeActions(handle, requestId, uri, range, context),
+		$provideDocumentFormattingEdits: (handle: number, requestId: number, uri: { scheme: string; path: string }, options: Parameters<typeof extHostLanguageFeatures.$provideDocumentFormattingEdits>[3]) =>
+			extHostLanguageFeatures.$provideDocumentFormattingEdits(handle, requestId, uri, options),
 		$cancelProviderRequest: (handle: number, requestId: number) => extHostLanguageFeatures.$cancelProviderRequest(handle, requestId)
 	}, new DisposableStore()));
 

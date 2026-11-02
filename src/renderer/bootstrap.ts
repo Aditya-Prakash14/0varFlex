@@ -1151,7 +1151,71 @@ async function main(): Promise<void> {
 				line: marker.range.startLineNumber,
 				column: marker.range.startColumn
 			})),
-			readHost: (method: string, args: unknown[]) => hostManager.callHostService('ExtHostLanguageFeatures', method, args)
+			readHost: (method: string, args: unknown[]) => hostManager.callHostService('ExtHostLanguageFeatures', method, args),
+			/** B3: how many providers of each kind registered for a language */
+			providerCounts: (languageId: string) => ({
+				completion: languageFeatures.getCompletionProviders(languageId).length,
+				hover: languageFeatures.getHoverProviders(languageId).length,
+				documentSymbol: languageFeatures.getDocumentSymbolProviders(languageId).length,
+				definition: languageFeatures.getDefinitionProviders(languageId).length,
+				rename: languageFeatures.getRenameProviders(languageId).length,
+				codeAction: languageFeatures.getCodeActionProviders(languageId).length,
+				formatting: languageFeatures.getDocumentFormattingEditProviders(languageId).length
+			}),
+			/** B3: drive one provider round-trip, to prove the wire path answers and not just registers */
+			askCompletion: (fsPath: string, languageId: string, lineNumber: number, column: number) => {
+				const adapter = languageFeatures.getCompletionProviders(languageId)[0];
+				const model = codeEditorService.findModel(URI.file(fsPath));
+				return adapter && model
+					? adapter.provideCompletionItems(URI.file(fsPath), model, { lineNumber, column }, { triggerKind: 0 }, 1)
+					: Promise.resolve(null);
+			},
+			/** B3: drive any of the five new provider kinds, to prove each wire shape round-trips */
+			ask: (kind: string, fsPath: string, languageId: string, lineNumber: number, column: number, extra?: string) => {
+				const resource = URI.file(fsPath);
+				const model = codeEditorService.findModel(resource);
+				if (!model) {
+					return Promise.resolve(null);
+				}
+				const position = { lineNumber, column };
+				switch (kind) {
+					case 'documentSymbol': {
+						const adapter = languageFeatures.getDocumentSymbolProviders(languageId)[0];
+						return adapter ? adapter.provideDocumentSymbols(resource, 10) : Promise.resolve(null);
+					}
+					case 'definition': {
+						const adapter = languageFeatures.getDefinitionProviders(languageId)[0];
+						return adapter ? adapter.provideDefinition(resource, position, 11) : Promise.resolve(null);
+					}
+					case 'prepareRename': {
+						const adapter = languageFeatures.getRenameProviders(languageId)[0];
+						return adapter ? adapter.resolveRenameLocation(resource, position, 12) : Promise.resolve(null);
+					}
+					case 'rename': {
+						const adapter = languageFeatures.getRenameProviders(languageId)[0];
+						return adapter ? adapter.provideRenameEdits(resource, position, extra ?? 'renamed', 13) : Promise.resolve(null);
+					}
+					case 'codeAction': {
+						const adapter = languageFeatures.getCodeActionProviders(languageId)[0];
+						return adapter
+							? adapter.provideCodeActions(resource, { startLineNumber: lineNumber, startColumn: column, endLineNumber: lineNumber, endColumn: column }, { trigger: 1 }, 14)
+							: Promise.resolve(null);
+					}
+					case 'formatting': {
+						const adapter = languageFeatures.getDocumentFormattingEditProviders(languageId)[0];
+						return adapter ? adapter.provideDocumentFormattingEdits(resource, { tabSize: 4, insertSpaces: false }, 15) : Promise.resolve(null);
+					}
+					default:
+						return Promise.resolve(null);
+				}
+			},
+			askHover: (fsPath: string, languageId: string, lineNumber: number, column: number) => {
+				const adapter = languageFeatures.getHoverProviders(languageId)[0];
+				const model = codeEditorService.findModel(URI.file(fsPath));
+				return adapter && model
+					? adapter.provideHover(URI.file(fsPath), model, { lineNumber, column }, 2)
+					: Promise.resolve(null);
+			}
 		},
 		terminal: {
 			isPanelVisible: () => workbench.layout.panel.visible,

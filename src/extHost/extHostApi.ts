@@ -120,6 +120,28 @@ export function createApiFactory(services: IExtHostApiServices): ICreateApiFacto
 					const normalized = typeof selector === 'string' ? { language: selector } : selector;
 					return services.languages.registerHoverProvider(extension, normalized, provider as never);
 				},
+				registerDocumentSymbolProvider(selector: { language?: string } | string, provider: unknown): Disposable {
+					const normalized = typeof selector === 'string' ? { language: selector } : selector;
+					return services.languages.registerDocumentSymbolProvider(extension, normalized, provider as never);
+				},
+				registerDefinitionProvider(selector: { language?: string } | string, provider: unknown): Disposable {
+					const normalized = typeof selector === 'string' ? { language: selector } : selector;
+					return services.languages.registerDefinitionProvider(extension, normalized, provider as never);
+				},
+				registerRenameProvider(selector: { language?: string } | string, provider: unknown): Disposable {
+					const normalized = typeof selector === 'string' ? { language: selector } : selector;
+					return services.languages.registerRenameProvider(extension, normalized, provider as never);
+				},
+				// `metadata` is the third argument in the reference too (providedCodeActionKinds)
+				registerCodeActionProvider(selector: { language?: string } | string, provider: unknown, metadata?: { providedCodeActionKinds?: readonly { value: string }[] | readonly string[] }): Disposable {
+					const normalized = typeof selector === 'string' ? { language: selector } : selector;
+					const kinds = metadata?.providedCodeActionKinds?.map(kind => typeof kind === 'string' ? kind : kind.value);
+					return services.languages.registerCodeActionProvider(extension, normalized, provider as never, { providedCodeActionKinds: kinds });
+				},
+				registerDocumentFormattingEditProvider(selector: { language?: string } | string, provider: unknown): Disposable {
+					const normalized = typeof selector === 'string' ? { language: selector } : selector;
+					return services.languages.registerDocumentFormattingEditProvider(extension, normalized, provider as never);
+				},
 				createDiagnosticCollection(name?: string): unknown {
 					return services.languages.createDiagnosticCollection(extension, name ?? extension.name);
 				}

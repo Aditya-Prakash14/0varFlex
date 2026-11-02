@@ -202,6 +202,118 @@ export const enum LspDiagnosticSeverity {
 	Hint = 4
 }
 
+// ---- language features (B2): symbol/definition/rename/code-action/formatting DTOs
+//
+// Shapes are the reference's, kept as plain data: IWireLocation is `languages.Location`,
+// IWireWorkspaceEdit is IWorkspaceEditDto narrowed to its text-edit arm (the file and cell arms
+// have no workbench to land in here), IWireRenameLocation is `languages.RenameLocation`.
+
+export interface IWireTextEdit {
+	readonly range: IWireRange;
+	readonly newText: string;
+}
+
+export interface IWireLocation {
+	readonly uri: IWireUri;
+	readonly range: IWireRange;
+}
+
+/** `vscode.DocumentSymbol`: `range` is the whole symbol, `selectionRange` the name to reveal */
+export interface IWireDocumentSymbol {
+	readonly name: string;
+	readonly detail?: string;
+	readonly kind: number;
+	readonly range: IWireRange;
+	readonly selectionRange: IWireRange;
+	readonly children?: readonly IWireDocumentSymbol[];
+}
+
+/** IWorkspaceEditDto's text arm only — one resource + one edit per entry, as IWorkspaceTextEdit */
+export interface IWireWorkspaceEdit {
+	readonly edits: readonly { readonly resource: IWireUri; readonly textEdit: IWireTextEdit }[];
+}
+
+/** what prepareRename answers: the range that will be renamed and its current text */
+export interface IWireRenameLocation {
+	readonly range: IWireRange;
+	readonly text: string;
+}
+
+export interface IWireCodeAction {
+	readonly title: string;
+	/** a CodeActionKind string (see CodeActionKind below) — dotted, hierarchical */
+	readonly kind?: string;
+	readonly edit?: IWireWorkspaceEdit;
+	readonly command?: { readonly id: string; readonly args?: readonly unknown[] };
+	readonly isPreferred?: boolean;
+}
+
+export interface IWireCodeActionContext {
+	/** CodeActionTriggerType: Invoke = 1, Auto = 2 */
+	readonly trigger: number;
+	/** the requested kind, when the editor asks for one family (e.g. 'source.organizeImports') */
+	readonly only?: string;
+}
+
+export interface IWireFormattingOptions {
+	readonly tabSize: number;
+	readonly insertSpaces: boolean;
+}
+
+/**
+ * `vscode.SymbolKind` verbatim (File = 0 … TypeParameter = 25). Note this is the EXTENSION API
+ * numbering, which is one below LSP's SymbolKind — the host API is what extensions see, so that
+ * is what crosses the wire.
+ */
+export const enum SymbolKind {
+	File = 0,
+	Module = 1,
+	Namespace = 2,
+	Package = 3,
+	Class = 4,
+	Method = 5,
+	Property = 6,
+	Field = 7,
+	Constructor = 8,
+	Enum = 9,
+	Interface = 10,
+	Function = 11,
+	Variable = 12,
+	Constant = 13,
+	String = 14,
+	Number = 15,
+	Boolean = 16,
+	Array = 17,
+	Object = 18,
+	Key = 19,
+	Null = 20,
+	EnumMember = 21,
+	Struct = 22,
+	Event = 23,
+	Operator = 24,
+	TypeParameter = 25
+}
+
+/** the reference's CodeActionKind values (extHostTypes/codeActionKind.ts), as the strings they are */
+export const CodeActionKind = {
+	Empty: '',
+	QuickFix: 'quickfix',
+	Refactor: 'refactor',
+	RefactorExtract: 'refactor.extract',
+	RefactorInline: 'refactor.inline',
+	RefactorMove: 'refactor.move',
+	RefactorRewrite: 'refactor.rewrite',
+	Source: 'source',
+	SourceOrganizeImports: 'source.organizeImports',
+	SourceFixAll: 'source.fixAll',
+	Notebook: 'notebook'
+} as const;
+
+export const enum CodeActionTriggerType {
+	Invoke = 1,
+	Auto = 2
+}
+
 // ---- conversion helpers (the boundary, in one place)
 
 export function uriToWire(uri: { scheme: string; path: string }): IWireUri {

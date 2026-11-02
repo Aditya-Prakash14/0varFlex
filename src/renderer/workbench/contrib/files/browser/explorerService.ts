@@ -14,15 +14,20 @@ import { URI } from '../../../../../common/base/common/uri.js';
 import type { ILogService } from '../../../../../common/platform/log/common/log.js';
 import type { ICommandService } from '../../../../platform/commands/common/commands.js';
 import { FileChangeType, FileChangesEvent, FileOperation, normalizeFileResource, IFileService } from '../../../../../common/platform/files/common/files.js';
+import { dirname } from '../../../../../vendor/vscode/base/common/path.js';
 import { EditorService } from '../../../services/editor/browser/editorService.js';
 import { NEW_FILE_ID, NEW_FOLDER_ID } from './fileCommands.js';
 import { ExplorerTree, IExplorerNode, IExplorerRowAction, newExplorerNode } from './tree/explorerTree.js';
 
-/** the parent directory as a URI (path-only helper: our URIs are file://) */
+/**
+ * The parent directory as a URI.
+ *
+ * Uses the vendored path module rather than splitting the string here: this helper used to look
+ * for '/' only, so on Windows — where `fsPath` is backslash-separated — it returned '/' for every
+ * path and the explorer never found a parent.
+ */
 export function dirnameUri(uri: URI): URI {
-	const fsPath = uri.fsPath;
-	const index = fsPath.lastIndexOf('/');
-	return URI.file(index <= 0 ? '/' : fsPath.substring(0, index));
+	return URI.file(dirname(uri.fsPath));
 }
 
 export interface IExplorerServiceServices {

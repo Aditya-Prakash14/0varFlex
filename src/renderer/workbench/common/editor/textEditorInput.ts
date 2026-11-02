@@ -5,6 +5,7 @@
 // delta vs the real text file stack (workbench/services/textfile + workingCopy): no working
 // copies, no autoSave, no encoding/BOM detection, no hot-exit backups. Save is one write.
 
+import { win32 } from '../../../../vendor/vscode/base/common/path.js';
 import { IDisposable } from '../../../../common/base/common/lifecycle.js';
 import { URI } from '../../../../common/base/common/uri.js';
 import type { IFileService } from '../../../../common/platform/files/common/files.js';
@@ -15,17 +16,17 @@ import type { EditorPane } from './editorPane.js';
 
 export const TEXT_EDITOR_TYPE_ID = 'workbench.editors.textEditorInput';
 
-/** basename with trailing-slash safety — ported in spirit from base/common/labels.ts */
+/**
+ * The display name of a path, accepting EITHER separator whatever host we are on.
+ *
+ * `win32.basename` and not the platform default, deliberately: a tab label may come from a path
+ * produced on another machine, and win32 treats both '/' and '\' as separators while posix treats
+ * a backslash as an ordinary filename character. For a real local filesystem path use the
+ * platform-default `dirname`/`basename` instead — there, a backslash in a posix filename is data,
+ * not a separator, and win32's rules would corrupt it.
+ */
 export function basename(path: string): string {
-	if (!path) {
-		return '';
-	}
-	const withoutTrailing = path.replace(/[\\/]+$/, '');
-	if (!withoutTrailing) {
-		return '/';
-	}
-	const index = Math.max(withoutTrailing.lastIndexOf('/'), withoutTrailing.lastIndexOf('\\'));
-	return index >= 0 ? withoutTrailing.substring(index + 1) : withoutTrailing;
+	return path ? win32.basename(path) : '';
 }
 
 /** the group supplies this; it creates the pane for a group asking for the input */

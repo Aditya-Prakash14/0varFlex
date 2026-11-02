@@ -15,6 +15,7 @@
 // shortcut: rows are rendered in full rather than windowed. A status list is tens of entries, not
 // the 20k a search can produce; upgrade to the search tree's pooling if a repository ever floods.
 
+import { basename, dirname } from '../../../../../vendor/vscode/base/common/path.js';
 import { Emitter, Event } from '../../../../../common/base/common/event.js';
 import { Disposable, DisposableStore } from '../../../../../common/base/common/lifecycle.js';
 import type { ICommandService } from '../../../../platform/commands/common/commands.js';
@@ -30,12 +31,13 @@ export interface ISCMViewServices {
 	readonly contextKeyService: IContextKeyService;
 }
 
-/** basename/dirname without pulling in node:path (the renderer is a browser bundle) */
+/**
+ * basename/dirname via the vendored path module — which IS node:path, ported by upstream to run
+ * in a browser bundle, so the comment this replaced ("without pulling in node:path") no longer
+ * describes a constraint.
+ */
 function splitPath(fsPath: string): { name: string; dir: string } {
-	const index = Math.max(fsPath.lastIndexOf('/'), fsPath.lastIndexOf('\\'));
-	return index >= 0
-		? { name: fsPath.slice(index + 1), dir: fsPath.slice(0, index) }
-		: { name: fsPath, dir: '' };
+	return { name: basename(fsPath), dir: dirname(fsPath) };
 }
 
 export class SCMView extends Disposable {

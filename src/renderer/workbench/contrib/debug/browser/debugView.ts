@@ -9,6 +9,7 @@
 // delta: no watch expressions, no REPL/debug console, no loaded-scripts or exception panes, no
 // thread grouping (one thread), no drag to reorder.
 
+import { basename } from '../../../../../vendor/vscode/base/common/path.js';
 import { Emitter, Event } from '../../../../../common/base/common/event.js';
 import { Disposable, DisposableStore } from '../../../../../common/base/common/lifecycle.js';
 import { URI } from '../../../../../common/base/common/uri.js';
@@ -27,9 +28,9 @@ export interface IDebugViewServices {
 	start(): void;
 }
 
+/** the file name shown beside a stack frame */
 function splitPath(fsPath: string): string {
-	const index = Math.max(fsPath.lastIndexOf('/'), fsPath.lastIndexOf('\\'));
-	return index >= 0 ? fsPath.slice(index + 1) : fsPath;
+	return basename(fsPath);
 }
 
 export class DebugView extends Disposable {

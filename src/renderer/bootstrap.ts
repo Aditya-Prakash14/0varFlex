@@ -2,6 +2,7 @@ import { ProxyChannel } from '../common/base/parts/ipc/ipc.js';
 import { URI } from '../common/base/common/uri.js';
 import { TextModel } from '../common/editor/common/model/textModel.js';
 import { InstantiationService } from '../common/platform/instantiation/common/instantiationService.js';
+import { dirname } from '../vendor/vscode/base/common/path.js';
 import { Event } from '../common/base/common/event.js';
 import { ServiceCollection } from '../common/platform/instantiation/common/serviceCollection.js';
 import { SyncDescriptor } from '../common/platform/instantiation/common/descriptors.js';
@@ -112,7 +113,11 @@ import { MainProcessChannelClient } from './parts/ipc/ipcRenderer.js';
  * silent — the directory keeps reporting.
  */
 function watchSettingsFile(fileService: IFileService, resource: URI, callback: () => void, logService: ILogService): void {
-	const parent = URI.file(resource.fsPath.substring(0, resource.fsPath.lastIndexOf('/')) || '/');
+	// `dirname`, not a lastIndexOf('/'): fsPath is backslash-separated on Windows, so the old
+	// string split found no separator, fell back to '/', and watched the filesystem ROOT instead
+	// of the settings directory — which is why an external edit to settings.json never triggered
+	// a reload on this platform.
+	const parent = URI.file(dirname(resource.fsPath));
 	void fileService.watch(parent, { recursive: false }).catch(error => logService.warn(`cannot watch ${parent.fsPath}: ${(error as Error).message}`));
 	fileService.onDidFilesChange(event => {
 		if (event.contains(resource)) {

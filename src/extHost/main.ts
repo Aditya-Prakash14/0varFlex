@@ -39,6 +39,7 @@ import {
 	MAIN_THREAD_MESSAGE,
 	MAIN_THREAD_STATUS_BAR
 } from '../common/platform/extensions/common/extensionHostProtocol.js';
+import { isInsideExtension } from '../common/platform/extensions/common/extensions.js';
 import type { IExtensionDescription } from '../common/platform/extensions/common/extensions.js';
 import { ExtHostCommands } from './extHostCommands.js';
 import { ExtHostLanguageFeatures } from './extHostLanguageFeatures.js';
@@ -80,7 +81,7 @@ function installRequireShim(): void {
 		if (request === 'vscode') {
 			const parentFile = parent?.filename ?? '';
 			for (const [location, api] of apiByExtensionLocation) {
-				if (parentFile.startsWith(location)) {
+				if (isInsideExtension(location, parentFile)) {
 					return api;
 				}
 			}

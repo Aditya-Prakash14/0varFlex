@@ -8,8 +8,7 @@ import {
 	checkEngineCompatibility,
 	toDisplayId,
 	toExtensionIdentifier,
-	validateManifest
-} from '../src/common/platform/extensions/common/extensions.js';
+	validateManifest, isInsideExtension, normalizeExtensionPath } from '../src/common/platform/extensions/common/extensions.js';
 import {
 	emptyManifestCache,
 	IExtensionScanResult,
@@ -219,4 +218,49 @@ test('scanner: missing directories are not errors (no user extensions yet)', asy
 	const result: { result: IExtensionScanResult } = await scanExtensions(fs, { directories: [{ path: '/user', kind: 'user' }], currentVersion: '0.0.1', cache: emptyManifestCache(), log: logger.log });
 	assert.equal(result.result.extensions.length, 0);
 	assert.equal(result.result.errors.length, 0);
+});
+
+// ---- extensionLocation ↔ file-path matching
+//
+// This is the comparison the `require('vscode')` shim makes to decide which extension's api a
+// file gets. It was broken on Windows and killed EVERY extension at runtime: the scanner joins
+// paths with '/' while Node reports '\', so the two strings never matched and each extension
+// failed with "Cannot find module 'vscode'". Found by running the app; pinned here.
+
+test('isInsideExtension matches a file inside the extension directory', () => {
+	assert.equal(isInsideExtension('/ext/git-lite', '/ext/git-lite/out/extension.js'), true);
+	assert.equal(isInsideExtension('/ext/git-lite', '/ext/git-lite'), true, 'the directory itself counts');
+});
+
+test('isInsideExtension matches across MIXED separators (the bug)', () => {
+	// exactly the shapes the app produced: scanner location vs Node's filename
+	assert.equal(
+		isInsideExtension('C:\\repo\\extensions/git-lite', 'C:\\repo\\extensions\\git-lite\\out\\extension.js'),
+		true,
+		'a mixed-separator location must still match the real file path'
+	);
+	assert.equal(isInsideExtension('/ext/a', '\\ext\\a\\out\\x.js'), true);
+});
+
+test('isInsideExtension does not match a sibling with a shared prefix', () => {
+	// `.../git-lite` must not claim `.../git-lite-extra`'s files
+	assert.equal(isInsideExtension('/ext/git-lite', '/ext/git-lite-extra/out/extension.js'), false);
+	assert.equal(isInsideExtension('/ext/a', '/ext/ab/out/x.js'), false);
+});
+
+test('isInsideExtension rejects a file outside the extension', () => {
+	assert.equal(isInsideExtension('/ext/a', '/ext/b/out/x.js'), false);
+	assert.equal(isInsideExtension('/ext/a', '/elsewhere/x.js'), false);
+	assert.equal(isInsideExtension('/ext/a', ''), false);
+});
+
+test('normalizeExtensionPath unifies separators', () => {
+	assert.equal(normalizeExtensionPath('a\\b\\c'), 'a/b/c');
+	assert.equal(normalizeExtensionPath('a/b/c'), 'a/b/c');
+});
+
+test('on Windows the comparison is case-insensitive, because the filesystem is', () => {
+	// the drive letter in particular arrives in either case depending on who produced the path
+	const sameFile = isInsideExtension('C:\\Repo\\Extensions/Git-Lite', 'c:\\repo\\extensions\\git-lite\\out\\extension.js');
+	assert.equal(sameFile, process.platform === 'win32');
 });

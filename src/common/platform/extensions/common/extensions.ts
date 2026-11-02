@@ -5,6 +5,29 @@
 // Identity rules ported: the IDENTITY is `publisher.name` LOWERCASED; the display id keeps the
 // original casing. One lowercase identity prevents a whole class of duplicate-extension bugs.
 
+/**
+ * One canonical spelling for an extension's directory, for comparing `extensionLocation`
+ * against a real file path.
+ *
+ * The scanner joins paths with '/' — it is filesystem-abstracted and has no platform path
+ * module — so on Windows `extensionLocation` reads `C:\...\extensions/git-lite` while Node
+ * reports `C:\...\extensions\git-lite\out\extension.js`. Comparing those raw strings fails,
+ * which made EVERY extension die with "Cannot find module 'vscode'". Found by running the app.
+ */
+export function normalizeExtensionPath(value: string): string {
+	const unified = value.replace(/\\/g, '/');
+	// Windows paths are case-insensitive, and the drive letter can arrive in either case
+	return typeof process !== 'undefined' && process.platform === 'win32' ? unified.toLowerCase() : unified;
+}
+
+/** true when `filePath` is the extension directory itself or a file inside it */
+export function isInsideExtension(extensionLocation: string, filePath: string): boolean {
+	const location = normalizeExtensionPath(extensionLocation);
+	const file = normalizeExtensionPath(filePath);
+	// the trailing separator keeps `.../git-lite` from also matching `.../git-lite-extra`
+	return file === location || file.startsWith(`${location}/`);
+}
+
 export interface IExtensionCommandContribution {
 	readonly command: string;
 	readonly title: string;

@@ -2358,6 +2358,170 @@ body {
 	outline: 1px solid #f38518;
 }
 
+/* ================= B3: code intelligence (rename, quick fix, breadcrumbs, outline) ================= */
+
+/* ---- rename ---- */
+/* the rename input: a small box anchored over the symbol, positioned in JS like the suggest widget */
+.editor-rename-widget {
+	position: absolute;
+	z-index: 30;
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	padding: 2px 4px;
+	background: #353535;
+	border: 1px solid #454545;
+	border-radius: 2px;
+	box-shadow: 0 2px 8px rgba(0, 0, 0, 0.36);
+}
+
+.rename-input {
+	width: 180px;
+	height: 20px;
+	padding: 0 6px;
+	background: #3c3c3c;
+	color: var(--mini-foreground);
+	border: 1px solid var(--mini-accent);
+	border-radius: 2px;
+	outline: none;
+	font-family: inherit;
+	font-size: 12px;
+}
+
+.rename-message {
+	max-width: 320px;
+	font-size: 11px;
+	color: #f48771;
+	white-space: nowrap;
+}
+
+/* ---- codeAction ---- */
+/* the Quick Fix menu (contrib/codeAction) — same anatomy as the suggest widget */
+.code-action-widget {
+	position: absolute;
+	z-index: 40;
+	width: 320px;
+	background: #252526;
+	border: 1px solid #454545;
+	box-shadow: 0 2px 8px rgba(0, 0, 0, 0.36);
+	color: var(--mini-foreground);
+	font-size: 13px;
+	font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+
+.code-action-list {
+	position: relative;
+	overflow-y: auto;
+}
+
+.code-action-row {
+	position: absolute;
+	left: 0;
+	right: 0;
+	height: 22px;
+	display: flex;
+	align-items: center;
+	box-sizing: border-box;
+	padding: 0 8px;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	cursor: pointer;
+}
+
+.code-action-row.selected {
+	background: #04395e;
+}
+
+.code-action-row.message {
+	cursor: default;
+	opacity: 0.8;
+	font-style: italic;
+}
+
+/* ---- outline ---- */
+/* ---- the breadcrumbs strip (B3): the symbols containing the cursor, outermost first ---- */
+
+.editor-breadcrumbs {
+	position: absolute;
+	top: 0;
+	left: 0;
+	z-index: 9;
+	display: flex;
+	align-items: center;
+	gap: 2px;
+	max-width: calc(100% - 220px); /* leave the find widget and sticky scroll their corner */
+	height: 22px;
+	padding: 0 8px;
+	overflow: hidden;
+	white-space: nowrap;
+	font-size: 12px;
+	color: #a9a9a9;
+	background: var(--mini-background);
+}
+
+.breadcrumb-item {
+	cursor: pointer;
+	padding: 0 2px;
+	border-radius: 2px;
+}
+
+.breadcrumb-item:hover,
+.breadcrumb-item:focus {
+	color: var(--mini-foreground);
+	background: rgba(255, 255, 255, 0.08);
+	outline: none;
+}
+
+.breadcrumb-separator {
+	color: #6e6e6e;
+}
+
+/* ---- the outline view (B3): the active file's symbols as indented rows ---- */
+
+.outline-view {
+	display: flex;
+	flex-direction: column;
+	height: 100%;
+	overflow: hidden;
+}
+
+.outline-list {
+	flex: 1;
+	overflow-y: auto;
+}
+
+.outline-row {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	height: 22px;
+	padding-right: 8px;
+	cursor: pointer;
+	white-space: nowrap;
+}
+
+.outline-row:hover,
+.outline-row:focus {
+	background: rgba(255, 255, 255, 0.06);
+	outline: none;
+}
+
+.outline-name {
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.outline-kind {
+	color: #6e6e6e;
+	font-size: 11px;
+}
+
+.outline-empty {
+	padding: 8px;
+	color: var(--mini-watermark-dim);
+}
+
 /* ---- folding (B2): gutter chevrons, in the margin beside the line numbers ---- */
 
 .editor-folding-gutter {

@@ -2,6 +2,7 @@ import { ProxyChannel } from '../common/base/parts/ipc/ipc.js';
 import { URI } from '../common/base/common/uri.js';
 import { TextModel } from '../common/editor/common/model/textModel.js';
 import { InstantiationService } from '../common/platform/instantiation/common/instantiationService.js';
+import { Event } from '../common/base/common/event.js';
 import { ServiceCollection } from '../common/platform/instantiation/common/serviceCollection.js';
 import { SyncDescriptor } from '../common/platform/instantiation/common/descriptors.js';
 import { ILogService } from '../common/platform/log/common/log.js';
@@ -22,7 +23,14 @@ import { registerHoverCommands, hoverControllerFor } from './editor/contrib/hove
 import { registerSuggestCommands, suggestControllerFor } from './editor/contrib/suggest/suggestController.js';
 import { bracketMatchingControllerFor, registerBracketMatchingCommands } from './editor/contrib/bracketMatching/bracketMatchingController.js';
 import { findControllerFor, registerFindCommands } from './editor/contrib/find/findController.js';
+import { breadcrumbsControllerFor, registerBreadcrumbsCommands } from './editor/contrib/breadcrumbs/breadcrumbsWidget.js';
+import { codeActionControllerFor, registerCodeActionCommands } from './editor/contrib/codeAction/codeActionController.js';
 import { foldingControllerFor, registerFoldingCommands } from './editor/contrib/folding/foldingController.js';
+import { registerFormatCommands } from './editor/contrib/format/formatController.js';
+import { registerGotoDefinitionCommands } from './editor/contrib/gotoSymbol/gotoDefinitionController.js';
+import { registerRenameCommands, renameControllerFor } from './editor/contrib/rename/renameController.js';
+import { insertSnippet, registerSnippetCommands, snippetControllerFor } from './editor/contrib/snippet/snippetController.js';
+import { registerOutlineView } from './workbench/contrib/outline/browser/outlineView.js';
 import { gotoErrorControllerFor, registerGotoErrorCommands } from './editor/contrib/gotoError/gotoErrorController.js';
 import { registerMulticursorCommands, REMOVE_SECONDARY_CURSORS_ID } from './editor/contrib/multicursor/multicursor.js';
 import { stickyScrollControllerFor } from './editor/contrib/stickyScroll/stickyScrollController.js';
@@ -395,6 +403,32 @@ async function main(): Promise<void> {
 	// here but still loses to the find widget, which registers at WorkbenchContrib weight.
 	registerMulticursorCommands(getActiveWidget);
 	registerFoldingCommands(() => foldingControllerFor(getActiveWidget()));
+
+	// ---- B3: code intelligence. Each of these is a no-op until an extension registers the
+	// matching provider, which is why they can all be wired unconditionally.
+	registerRenameCommands(() => renameControllerFor(getActiveWidget()));
+	registerCodeActionCommands(() => codeActionControllerFor(getActiveWidget()));
+	registerSnippetCommands(() => snippetControllerFor(getActiveWidget()));
+	registerBreadcrumbsCommands(() => breadcrumbsControllerFor(getActiveWidget()));
+	registerFormatCommands({
+		getActiveWidget,
+		getResource: () => editorService.activeInput?.getResource() ?? undefined,
+		languageFeatures,
+		getFormattingOptions: () => ({
+			tabSize: configurationService.getValue<number>('editor.tabSize') ?? 4,
+			insertSpaces: configurationService.getValue<boolean>('editor.insertSpaces') ?? false
+		})
+	});
+	// F12 takes an opener rather than importing the editor service, so the contrib stays a contrib
+	registerGotoDefinitionCommands({
+		getActiveWidget,
+		getResource: () => editorService.activeInput?.getResource(),
+		languageFeatures,
+		openEditor: target => editorService.openEditor({
+			resource: target.resource,
+			options: { selection: target.selection, focus: true }
+		})
+	});
 	CommandsRegistry.registerCommand(REMOVE_SECONDARY_CURSORS_ID, () => getActiveWidget()?.collapseToPrimaryCursor());
 	CommandMetadata.register({ id: REMOVE_SECONDARY_CURSORS_ID, title: 'Remove Secondary Cursors', category: 'Cursor' });
 	KeybindingsRegistry.registerKeybindingRule({
@@ -565,6 +599,25 @@ async function main(): Promise<void> {
 		if (workbench.layout.sidebar.activeCompositeId === 'source-control') {
 			workbench.layout.sidebar.updateTitle();
 		}
+	});
+	// B3: the outline, reading the same debounced document-symbol fetch the breadcrumbs use
+	const outlineView = registerOutlineView({
+		getActiveController: () => breadcrumbsControllerFor(getActiveWidget()),
+		// two independent triggers, and either can come first: opening a tab, and a language
+		// provider registering (extension activation is asynchronous, so the provider usually
+		// appears after the editor did). Binding on only the first leaves the outline empty.
+		onDidChangeActiveEditor: Event.any<unknown>(editorService.onDidOpenEditor, languageFeatures.onDidChangeProviders),
+		showOutline: () => {
+			if (!workbench.layout.sidebar.visible) {
+				workbench.layout.setSidebarVisible(true);
+			}
+			workbench.layout.sidebar.showComposite('outline');
+		}
+	});
+	workbench.layout.sidebar.registerComposite({
+		id: 'outline',
+		element: outlineView.element,
+		getTitle: () => 'OUTLINE'
 	});
 	workbench.layout.sidebar.registerComposite({
 		id: 'debug',
@@ -1047,6 +1100,12 @@ async function main(): Promise<void> {
 		},
 		/** B2: the model lines sticky scroll currently has pinned */
 		getPinnedLines: () => stickyScrollControllerFor(getActiveWidget())?.getPinnedLines() ?? [],
+		/** B3: insert a snippet at the cursor and start its tab-stop session */
+		insertSnippet: (template: string) => insertSnippet(getActiveWidget(), template),
+		/** B3: the breadcrumb path for the cursor, outermost first */
+		getBreadcrumbs: () => breadcrumbsControllerFor(getActiveWidget())?.getPath().map(symbol => symbol.name) ?? [],
+		/** B3: the document symbols the outline and breadcrumbs share */
+		getOutline: () => breadcrumbsControllerFor(getActiveWidget())?.getTree().map(node => node.symbol.name) ?? [],
 		/** B2: the header lines of the collapsed regions, and the view-line count they produce */
 		getCollapsedLines: () => foldingControllerFor(getActiveWidget())?.getCollapsedLines() ?? [],
 		getViewLineCount: () => getActiveWidget()?.getViewModel().getLineMapping().viewLineCount ?? 0

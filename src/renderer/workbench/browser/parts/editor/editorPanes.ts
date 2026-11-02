@@ -14,7 +14,14 @@ import { append, $ } from '../../../../base/browser/dom.js';
 import { Selection } from '../../../../editor/browser/core/selection.js';
 import { EditorWidget, IEditorWidgetServices } from '../../../../editor/browser/editorWidget.js';
 import { BracketMatchingController, registerBracketMatchingController } from '../../../../editor/contrib/bracketMatching/bracketMatchingController.js';
+import { BreadcrumbsController, registerBreadcrumbsController } from '../../../../editor/contrib/breadcrumbs/breadcrumbsWidget.js';
+import { CodeActionController, registerCodeActionController } from '../../../../editor/contrib/codeAction/codeActionController.js';
 import { FoldingController, registerFoldingController } from '../../../../editor/contrib/folding/foldingController.js';
+import { RenameController, registerRenameController } from '../../../../editor/contrib/rename/renameController.js';
+import {
+	HasNextTabstopContext, HasPrevTabstopContext, InSnippetModeContext,
+	registerSnippetController, SnippetController
+} from '../../../../editor/contrib/snippet/snippetController.js';
 import { GotoErrorController, registerGotoErrorController } from '../../../../editor/contrib/gotoError/gotoErrorController.js';
 import { HoverController } from '../../../../editor/contrib/hover/hoverController.js';
 import { registerStickyScrollController, StickyScrollController } from '../../../../editor/contrib/stickyScroll/stickyScrollController.js';
@@ -79,6 +86,28 @@ export class TextEditorPane extends EditorPane {
 			new StickyScrollController(this._widget, _services.configuration)));
 		// B2: folding, on the view-line mapping the word wrap work will share
 		registerFoldingController(this._widget, this._register(new FoldingController(this._widget)));
+
+		// ---- B3: the language-provider features. Each resolves its provider through
+		// `_services.languageFeatures` and is a clean no-op when nothing registered one.
+		registerRenameController(this._widget, this._register(
+			new RenameController(this._widget, _services.languageFeatures, () => input.resource)));
+		registerCodeActionController(this._widget, this._register(
+			new CodeActionController(this._widget, _services, () => input.resource)));
+		registerBreadcrumbsController(this._widget, this._register(
+			new BreadcrumbsController(this._widget, _services.languageFeatures, () => input.resource)));
+
+		// snippet sessions: Tab/Shift+Tab walk the tab stops, but only while a session is live —
+		// the context keys are what stop that stealing Tab from ordinary indentation
+		const snippets = this._register(new SnippetController(this._widget));
+		registerSnippetController(this._widget, snippets);
+		const inSnippetMode = InSnippetModeContext.bindTo(_services.contextKeyService);
+		const hasNextTabstop = HasNextTabstopContext.bindTo(_services.contextKeyService);
+		const hasPrevTabstop = HasPrevTabstopContext.bindTo(_services.contextKeyService);
+		this._register(snippets.onDidChangeState(state => {
+			inSnippetMode.set(state.inSnippetMode);
+			hasNextTabstop.set(state.hasNextTabstop);
+			hasPrevTabstop.set(state.hasPrevTabstop);
+		}));
 		const findVisible = FindWidgetVisibleContext.bindTo(_services.contextKeyService);
 		this._register(find.onDidChangeVisibility(visible => findVisible.set(visible)));
 		// A2-2: gutter breakpoints, reusing 12's margin-layer mechanism

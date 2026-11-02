@@ -9,6 +9,7 @@
 //     demand; providers call BACK into the host ($provideCompletionItems/$provideHover) with a
 //     request id so superseded fetches can be cancelled at the LSP layer.
 
+import { Emitter, Event } from '../../../../common/base/common/event.js';
 import { Disposable, IDisposable, toDisposable } from '../../../../common/base/common/lifecycle.js';
 import { URI } from '../../../../common/base/common/uri.js';
 import type { ILogService } from '../../../../common/platform/log/common/log.js';
@@ -132,13 +133,32 @@ export class LanguageFeatureRegistry<T extends { handle: number }> {
 	private _order = 0;
 	private readonly _registrations = new Map<number, IRegistration<T>>();
 
+	/**
+	 * Fired whenever the provider set changes.
+	 *
+	 * This exists because extension activation is ASYNCHRONOUS: a provider almost always
+	 * registers AFTER the editor that wants it has opened. A contrib that asks once and caches
+	 * the answer — the outline does — would otherwise hold an empty result forever, and the
+	 * feature would look broken until the user happened to type. On-demand consumers (suggest,
+	 * hover) do not need this; anything that caches does.
+	 */
+	private readonly _onDidChange = new Emitter<void>();
+	readonly onDidChange: Event<void> = this._onDidChange.event;
+
 	register(language: string, provider: T): IDisposable {
 		this._registrations.set(provider.handle, { language, order: this._order++, provider });
-		return toDisposable(() => this._registrations.delete(provider.handle));
+		this._onDidChange.fire();
+		return toDisposable(() => {
+			if (this._registrations.delete(provider.handle)) {
+				this._onDidChange.fire();
+			}
+		});
 	}
 
 	unregister(handle: number): void {
-		this._registrations.delete(handle);
+		if (this._registrations.delete(handle)) {
+			this._onDidChange.fire();
+		}
 	}
 
 	/** the ported `ordered(model)`: exact language matches, later registrations win ties */
@@ -176,6 +196,8 @@ export interface ILanguageFeaturesService {
 	languageIdForResource(resource: URI): string;
 	/** superseded fetches: fire the provider's token (→ LSP $/cancelRequest) */
 	cancelRequest(handle: number, requestId: number): void;
+	/** a provider of any kind appeared or went away; a contrib that CACHES results must re-ask */
+	readonly onDidChangeProviders: Event<void>;
 }
 
 export class LanguageFeaturesService extends Disposable implements ILanguageFeaturesService {
@@ -187,10 +209,25 @@ export class LanguageFeaturesService extends Disposable implements ILanguageFeat
 	readonly renames = new LanguageFeatureRegistry<IRenameProviderAdapter>();
 	readonly codeActions = new LanguageFeatureRegistry<ICodeActionProviderAdapter>();
 	readonly documentFormattingEdits = new LanguageFeatureRegistry<IDocumentFormattingEditProviderAdapter>();
+
+	/** any provider of any kind appearing or going away — see LanguageFeatureRegistry.onDidChange */
+	private readonly _onDidChangeProviders = this._register(new Emitter<void>());
+	readonly onDidChangeProviders: Event<void> = this._onDidChangeProviders.event;
 	private readonly _triggerCharacters = new Map<string, Set<string>>();
 	private _languageIdResolver: ((resource: URI) => string) | null = null;
 	/** bubbles superseded requests up to the host (set by createMainThreadLanguageFeatures) */
 	private _cancelRequest: ((handle: number, requestId: number) => void) | null = null;
+
+	constructor() {
+		super();
+		// one event for all seven registries, so a caching contrib subscribes once
+		for (const registry of [
+			this.completions, this.hovers, this.documentSymbols, this.definitions,
+			this.renames, this.codeActions, this.documentFormattingEdits
+		]) {
+			this._register(registry.onDidChange(() => this._onDidChangeProviders.fire()));
+		}
+	}
 
 	setLanguageIdResolver(resolver: (resource: URI) => string): void {
 		this._languageIdResolver = resolver;

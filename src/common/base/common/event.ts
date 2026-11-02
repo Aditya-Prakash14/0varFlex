@@ -41,6 +41,25 @@ export namespace Event {
 	}
 
 	/**
+	 * One event that fires whenever ANY of the given events fires.
+	 *
+	 * Ported from the reference's Event.any. Needed wherever a consumer has to react to two
+	 * independent triggers — the outline rebinds both when the active editor changes AND when a
+	 * language provider registers, because extension activation is asynchronous and either can
+	 * happen first.
+	 */
+	export function any<T>(...events: Event<T>[]): Event<T> {
+		return (listener, thisArgs = null, disposables?) => {
+			const subscriptions = events.map(event => event(value => listener.call(thisArgs, value), null, disposables));
+			return toDisposable(() => {
+				for (const subscription of subscriptions) {
+					subscription.dispose();
+				}
+			});
+		};
+	}
+
+	/**
 	 * Maps an event of one type into an event of another type, similar to how `Array.prototype.map` works.
 	 */
 	// shortcut: every listener subscribes the source event (upstream shares one subscription via a

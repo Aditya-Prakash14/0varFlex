@@ -85,13 +85,17 @@
 		});
 	}
 
-	// the section rail highlights what is on screen
+	// the section rail and the top nav highlight what is on screen
 	if ('IntersectionObserver' in window) {
 		const railLinks = new Map([...document.querySelectorAll('[data-rail]')].map(link => [link.getAttribute('data-rail'), link]));
+		const navLinks = new Map([...document.querySelectorAll('.nav-links a[href^="#"]')].map(link => [link.getAttribute('href').slice(1), link]));
 		const observer = new IntersectionObserver(entries => {
 			entries.filter(entry => entry.isIntersecting).forEach(entry => {
 				railLinks.forEach(link => link.classList.remove('is-active'));
 				railLinks.get(entry.target.id)?.classList.add('is-active');
+				navLinks.forEach(link => { link.classList.remove('is-current'); link.removeAttribute('aria-current'); });
+				const current = navLinks.get(entry.target.id);
+				if (current) { current.classList.add('is-current'); current.setAttribute('aria-current', 'true'); }
 			});
 		}, { rootMargin: '-45% 0px -45% 0px' });
 		railLinks.forEach((_, id) => { const section = document.getElementById(id); if (section) { observer.observe(section); } });
